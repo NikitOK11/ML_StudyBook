@@ -1,0 +1,5 @@
+services:
+  ml-atlas:
+    build: .
+    ports:
+      - "8080:80"
