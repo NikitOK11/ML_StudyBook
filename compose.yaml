@@ -1,5 +1,6 @@
 services:
-  ml-atlas:
+  ml-textbook:
     build: .
     ports:
       - "8080:80"
+      - "4173:80"
