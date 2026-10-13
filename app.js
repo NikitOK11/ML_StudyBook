@@ -1,141 +1,444 @@
-(() => {
-  const app = document.getElementById('app');
-  const storageKey = 'fitpredict-ml-atlas-v1';
-  const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-  const state = {
-    view: saved.view || 'landing',
-    lab: saved.lab || 'linear',
-    selectedMap: saved.selectedMap || null,
-    linear: saved.linear || { dataset: 'linear', w: 0, b: 0, lr: .08, reg: .02, steps: 0 },
-    knn: saved.knn || { k: 3, metric: 'euclidean', scaling: false },
-    tree: saved.tree || { criterion: 'gini', depth: 3, minLeaf: 2, manualRoot: null }
+import { buildTree, countTreeNodes, gradientStep, linearConvergence, linearGradients, logisticStep, trainLogistic, meanSquaredError, trainLinear, svmStep, trainSvm } from './src/algorithms.js?v=20260915-ml5';
+import { linearDatasets, logisticRows, moduleCatalog, treePoints, svmPoints } from './src/data.js?v=20260915-ml5';
+import { createStore } from './src/state.js?v=20260915-ml5';
+import {
+  aboutView,
+  datasetProfileView,
+  demoView,
+  getLinearChartData,
+  introView,
+  knnChart,
+  knnLab,
+  knnTheoryView,
+  linearLab,
+  linearLinePath,
+  linearTheoryView,
+  logisticLab,
+  logisticTheoryView,
+  mapView,
+  profileView,
+  signupView,
+  svmLab,
+  svmTheoryView,
+  treeLab,
+  treeNodePopover,
+  treeTheoryView,
+  unavailableView
+} from './src/views.js?v=20260915-ml5';
+
+const app = document.getElementById('app');
+const store = createStore();
+let demoTimer = null;
+let treeTimer = null;
+
+function render() {
+  const state = store.get();
+  const module = moduleCatalog.find(item => item.id === state.selectedModule);
+
+  const views = {
+    intro: () => introView(),
+    demo: () => demoView(state.linear),
+    signup: () => signupView(state.profile),
+    map: () => mapView(state.selectedModule),
+    linear: () => linearLab(state.linear),
+    'linear-theory': () => linearTheoryView(state.theoryIndexCollapsed),
+    logistic: () => logisticLab(state.logistic),
+    'logistic-theory': () => logisticTheoryView(state.theoryIndexCollapsed),
+    knn: () => knnLab(state.knn),
+    'knn-theory': () => knnTheoryView(state.theoryIndexCollapsed),
+    tree: () => treeLab(state.tree),
+    'tree-theory': () => treeTheoryView(state.theoryIndexCollapsed),
+    svm: () => svmLab(state.svm),
+    'svm-theory': () => svmTheoryView(state.theoryIndexCollapsed),
+    unavailable: () => module ? unavailableView(module) : mapView(null),
+    about: () => aboutView(),
+    profile: () => profileView(state.profile),
+    'dataset-profile': () => {
+      const profile = state.datasetProfile || { kind: 'linear', returnRoute: 'linear' };
+      return datasetProfileView(profile.kind, profile.returnRoute);
+    }
   };
 
-  const linearSets = {
-    linear: { label: 'Линейная зависимость', points: [[-4,-7.1],[-3,-5.4],[-2,-3.1],[-1,-1.5],[0,.8],[1,3.1],[2,5.3],[3,7.2],[4,9.6]] },
-    nonlinear: { label: 'Нелинейная зависимость', points: [[-4,7.4],[-3,3.3],[-2,.5],[-1,-1.2],[0,-1.5],[1,-.5],[2,1.2],[3,4.1],[4,7.7]] }
-  };
-  const knnPoints = [
-    { x:1.0,y:18,c:0 },{ x:1.6,y:32,c:0 },{ x:2.1,y:25,c:0 },{ x:2.7,y:44,c:0 },{ x:3.1,y:39,c:0 },
-    { x:6.2,y:88,c:1 },{ x:6.8,y:74,c:1 },{ x:7.3,y:94,c:1 },{ x:7.8,y:81,c:1 },{ x:8.4,y:102,c:1 }
-  ];
-  // Без масштабирования большой второй признак тянет жёлтую точку к зелёному классу.
-  // После min-max scaling первым становится близкий по x красный сосед.
-  const knnTarget = { x:3.3,y:82 };
-  const treePoints = [
-    {x:1.0,y:1.2,c:0},{x:1.8,y:2.2,c:0},{x:2.5,y:1.4,c:0},{x:3.1,y:3.0,c:0},{x:3.9,y:2.4,c:0},
-    {x:5.2,y:1.1,c:1},{x:6.1,y:2.2,c:1},{x:7.0,y:1.4,c:1},{x:7.7,y:2.9,c:1},{x:8.6,y:2.0,c:1},
-    {x:1.4,y:6.8,c:1},{x:2.7,y:7.6,c:1},{x:3.6,y:6.2,c:1},{x:4.2,y:7.8,c:1},{x:6.0,y:6.3,c:0},{x:7.1,y:7.5,c:0},{x:8.4,y:6.7,c:0}
-  ];
+  const selectedView = views[state.route] || views.intro;
+  try {
+    app.innerHTML = selectedView();
+  } catch (error) {
+    console.error('Не удалось отрисовать сохранённый экран, возвращаем стартовую страницу.', error);
+    store.set({ route: 'intro', selectedModule: null, datasetProfile: null });
+    app.innerHTML = introView();
+  }
 
-  function persist() { localStorage.setItem(storageKey, JSON.stringify(state)); }
-  function escapeHTML(value) { return String(value).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
-  function shell(content) {
-    return `<div class="app"><header class="topbar"><div class="top-label">ML ATLAS</div><div class="top-actions"><button class="quiet-button" data-action="home">Главная</button><button class="quiet-button" data-action="map">Карта</button></div></header>${content}</div>`;
-  }
-  function landing() {
-    return shell(`<section class="landing"><div class="landing-copy"><div class="kicker">интерактивный учебник</div><h1>Понимай<br>алгоритмы<br><span>изнутри.</span></h1><p>Меняй реальные параметры модели, смотри на последствия и собирай интуицию — не запоминай готовые рецепты.</p><div class="landing-actions"><button class="primary" data-action="demo">Начать демо <span>→</span></button><span class="micro">линейная регрессия<br>за 60 секунд</span></div></div><div class="hero-card"><div class="window-header"><span class="dots"><i></i><i></i><i></i></span><span>linear-regression.lab</span></div><div class="hero-code">model.<span>fit</span>(X, y)</div>${linearChart(linearSets.linear.points, 2.05, .8, { small: true })}</div></section>`);
-  }
-  function mapView() {
-    const titles = { knn: 'KNN', linear: 'Линейную регрессию', tree: 'Решающее дерево' };
-    const node = (id, title, meta, cls) => `<button class="node ${cls} ${state.selectedMap === id ? 'active' : ''}" data-select-lab="${id}"><small>${id === 'knn' ? '01 / начало' : id === 'linear' ? '02 / демо' : '03 / далее'}</small><strong>${title}</strong><span>${meta}</span></button>`;
-    const selectedTitle = state.selectedMap ? titles[state.selectedMap] : 'вершину';
-    return shell(`<section class="map-screen"><div class="map-head"><h2>Карта<br><span>модулей.</span></h2><p>Выбери вершину, затем открой её лабораторию.</p></div><div class="map"><svg class="map-svg" viewBox="0 0 1000 580" role="img" aria-label="Спиральная карта алгоритмов"><path d="M55 365C35 115 650 18 735 222C828 439 368 533 171 334C17 177 456 -2 877 118C1088 179 924 486 543 535"/><path class="active-path" d="M55 365C78 262 217 191 355 177"/><circle cx="55" cy="365" r="4"/><circle class="active-dot" cx="355" cy="177" r="5"/><circle cx="885" cy="330" r="4"/><circle class="star" cx="86" cy="45" r="2"/><circle class="star" cx="244" cy="35" r="1.5"/><circle class="star" cx="477" cy="37" r="2"/><circle class="star" cx="854" cy="72" r="1.5"/><circle class="star" cx="940" cy="243" r="2"/><circle class="star" cx="426" cy="542" r="1.5"/></svg>${node('knn','KNN','соседи и расстояния','node-knn')}${node('linear','Линейная регрессия','веса и gradient descent','node-linear')}${node('tree','Решающее дерево','split’ы и impurity','node-tree')}<div class="map-open"><button class="primary" data-action="open-selected" ${state.selectedMap ? '' : 'disabled'}>Открыть ${selectedTitle} <span>→</span></button></div></div></section>`);
-  }
-  function scale(points, width = 690, height = 395, pad = 55) {
-    const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
-    const xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
-    const dx = Math.max(1, xmax - xmin), dy = Math.max(1, ymax - ymin);
-    const x = value => pad + ((value - xmin) / dx) * (width - 2 * pad);
-    const y = value => height - pad - ((value - ymin) / dy) * (height - 2 * pad);
-    return { x, y, xmin, xmax, ymin, ymax, width, height, pad };
-  }
-  function linearChart(points, w, b, { small = false } = {}) {
-    const predicted = points.map(([x]) => w * x + b);
-    const all = points.concat(points.map(([x], i) => [x, predicted[i]]));
-    const s = scale(all, small ? 630 : 720, small ? 315 : 395, small ? 55 : 62);
-    const line = `M ${s.x(s.xmin)} ${s.y(w*s.xmin+b)} L ${s.x(s.xmax)} ${s.y(w*s.xmax+b)}`;
-    const vertical = [0,1,2,3,4].map(i => { const v=s.xmin+(s.xmax-s.xmin)*i/4; return `<path class="grid" d="M${s.x(v)} ${s.pad}V${s.height-s.pad}"/>`; }).join('');
-    const horizontal = [0,1,2,3,4].map(i => { const v=s.ymin+(s.ymax-s.ymin)*i/4; return `<path class="grid" d="M${s.pad} ${s.y(v)}H${s.width-s.pad}"/>`; }).join('');
-    return `<svg class="chart-svg" viewBox="0 0 ${s.width} ${s.height}" role="img" aria-label="Данные и прямая модели">${vertical}${horizontal}<path class="axis" d="M${s.pad} ${s.height-s.pad}H${s.width-s.pad}M${s.pad} ${s.height-s.pad}V${s.pad}"/><path class="model-line" d="${line}"/>${points.map(([x,y]) => `<circle class="data-point" cx="${s.x(x)}" cy="${s.y(y)}" r="${small ? 5 : 6}"/>`).join('')}</svg>`;
-  }
-  function mse(points, w, b) { return points.reduce((sum, [x,y]) => sum + (w*x+b-y)**2, 0) / points.length; }
-  function linearLab() {
-    const model = state.linear, data = linearSets[model.dataset], loss = mse(data.points, model.w, model.b);
-    const bubble = (title, control, math) => `<div class="bubble"><div class="bubble-title"><span>${title}</span>${math ? '<button class="math" data-math="'+math+'">математика ↗</button>' : ''}</div>${control}</div>`;
-    const left = bubble('Датасет', `<select data-linear="dataset"><option value="linear" ${model.dataset==='linear'?'selected':''}>Линейная зависимость</option><option value="nonlinear" ${model.dataset==='nonlinear'?'selected':''}>Нелинейная зависимость</option></select>`, 'dataset') + bubble('Начальный вес w', `<div class="range-line"><input data-linear="w" type="range" min="-3" max="3" step=".1" value="${model.w}"><span class="range-value">${model.w.toFixed(1)}</span></div>`, 'weight');
-    const right = bubble('Learning rate', `<div class="range-line"><input data-linear="lr" type="range" min=".01" max=".3" step=".01" value="${model.lr}"><span class="range-value">${model.lr.toFixed(2)}</span></div>`, 'gradient') + bubble('L2 регуляризация', `<div class="range-line"><input data-linear="reg" type="range" min="0" max=".3" step=".01" value="${model.reg}"><span class="range-value">${model.reg.toFixed(2)}</span></div>`, 'regularization') + bubble('Смещение b', `<div class="range-line"><input data-linear="b" type="range" min="-4" max="4" step=".1" value="${model.b}"><span class="range-value">${model.b.toFixed(1)}</span></div>`, 'weight');
-    const math = `<div class="math-card" id="math-card" hidden></div>`;
-    return shell(`<section class="lab-shell"><div class="lab-top"><div class="lab-name"><button class="back" data-action="map">← карта</button><h2>Линейная регрессия</h2></div><span class="lab-status">реальное обучение / batch GD</span></div><div class="lab-grid"><aside class="bubbles">${left}</aside><section class="visual"><div class="visual-head"><span>данные A / ${escapeHTML(data.label)}</span><span class="metric">MSE ${loss.toFixed(3)}</span></div>${linearChart(data.points, model.w, model.b)}<div class="lab-controls"><button class="secondary" data-action="linear-reset">Сбросить</button><button class="secondary" data-action="linear-step">Один шаг</button><button class="primary" data-action="linear-train">До сходимости →</button></div>${math}</section><aside class="bubbles">${right}</aside></div></section>`);
-  }
-  function normalized(point, points) {
-    const xs=points.map(p=>p.x),ys=points.map(p=>p.y); const mx=(Math.min(...xs)+Math.max(...xs))/2, my=(Math.min(...ys)+Math.max(...ys))/2;
-    const sx=Math.max(1,Math.max(...xs)-Math.min(...xs)), sy=Math.max(1,Math.max(...ys)-Math.min(...ys));
-    return { x:(point.x-mx)/sx, y:(point.y-my)/sy };
-  }
-  function knnDistances() {
-    const cfg=state.knn; const target=cfg.scaling?normalized(knnTarget,knnPoints):knnTarget;
-    return knnPoints.map((p,i)=>{const q=cfg.scaling?normalized(p,knnPoints):p;const d=cfg.metric==='manhattan'?Math.abs(q.x-target.x)+Math.abs(q.y-target.y):Math.hypot(q.x-target.x,q.y-target.y);return {...p,d,i};}).sort((a,b)=>a.d-b.d);
-  }
-  function knnLab() {
-    const cfg=state.knn, distances=knnDistances(), neighbors=distances.slice(0,cfg.k), vote=neighbors.reduce((sum,p)=>sum+(p.c?1:-1),0), prediction=vote>0?1:0;
-    const sx=x=>54+x/10*610, sy=y=>360-y/120*300;
-    const circles=knnPoints.map((p,i)=>{const n=neighbors.some(q=>q.i===i);return `<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="${n?10:7}" fill="${p.c?'#87dbaa':'#ff7272'}" stroke="${n?'#ffb900':'rgba(255,255,255,.55)'}" stroke-width="${n?3:1.5}"/>`;}).join('');
-    const bubble=(title,content,math)=>`<div class="bubble"><div class="bubble-title"><span>${title}</span>${math?'<button class="math" data-math="'+math+'">математика ↗</button>':''}</div>${content}</div>`;
-    const left=bubble('Количество соседей k',`<div class="range-line"><input data-knn="k" type="range" min="1" max="7" step="2" value="${cfg.k}"><span class="range-value">${cfg.k}</span></div>`,'knn')+bubble('Масштабирование',`<select data-knn="scaling"><option value="false" ${!cfg.scaling?'selected':''}>Выключено</option><option value="true" ${cfg.scaling?'selected':''}>Min-max scaling</option></select>`,'scaling');
-    const right=bubble('Метрика расстояния',`<select data-knn="metric"><option value="euclidean" ${cfg.metric==='euclidean'?'selected':''}>Евклидова</option><option value="manhattan" ${cfg.metric==='manhattan'?'selected':''}>Манхэттенская</option></select>`,'metric')+bubble('Ближайшие точки',`<div class="empty-note">${neighbors.map(p=>`(${p.x.toFixed(1)}, ${p.y}) — ${p.d.toFixed(2)}`).join('<br>')}</div>`);
-    return shell(`<section class="lab-shell"><div class="lab-top"><div class="lab-name"><button class="back" data-action="map">← карта</button><h2>KNN</h2></div><span class="lab-status">соседи / признаки / расстояние</span></div><div class="lab-grid"><aside class="bubbles">${left}</aside><section class="visual"><div class="visual-head"><span>класс жёлтой точки</span><span class="metric">${prediction?'зелёный':'красный'} / k=${cfg.k}</span></div><svg class="chart-svg" viewBox="0 0 720 410" role="img" aria-label="Точки двух классов и ближайшие соседи"><path class="grid" d="M54 60H665M54 135H665M54 210H665M54 285H665M54 360H665M54 60V360M176 60V360M298 60V360M420 60V360M542 60V360M665 60V360"/><path class="axis" d="M54 360H678M54 372V50"/>${circles}<circle cx="${sx(knnTarget.x)}" cy="${sy(knnTarget.y)}" r="11" fill="#ffb900" stroke="#fff2bd" stroke-width="2"/><text x="64" y="43" fill="#99999f" font-size="12">признак 2: большой масштаб</text><text x="590" y="388" fill="#99999f" font-size="12">признак 1</text></svg><div class="lab-controls"><button class="secondary" data-action="knn-toggle">${cfg.scaling?'Показать без scaling':'Нормализовать признаки'}</button></div><div class="math-card" id="math-card" hidden></div></section><aside class="bubbles">${right}</aside></div></section>`);
-  }
-  function impurity(rows, criterion) {
-    if (!rows.length) return 0; const p=rows.filter(r=>r.c).length/rows.length;
-    return criterion==='entropy' ? (p? -p*Math.log2(p):0) + (p<1?-(1-p)*Math.log2(1-p):0) : 2*p*(1-p);
-  }
-  function candidateSplits(rows, criterion, minLeaf) {
-    const result=[];
-    ['x','y'].forEach(feature=>{
-      const values=[...new Set(rows.map(r=>r[feature]))].sort((a,b)=>a-b);
-      values.slice(0,-1).forEach((v,i)=>{const t=(v+values[i+1])/2,l=rows.filter(r=>r[feature]<=t),right=rows.filter(r=>r[feature]>t);if(l.length<minLeaf||right.length<minLeaf)return;const before=impurity(rows,criterion);const after=(l.length*impurity(l,criterion)+right.length*impurity(right,criterion))/rows.length;result.push({feature,t,left:l,right,drop:before-after,before,after});});
-    }); return result.sort((a,b)=>b.drop-a.drop);
-  }
-  function buildTree(rows, depth, cfg, forcedRoot=null) {
-    const base={rows,depth,imp:impurity(rows,cfg.criterion),class:rows.filter(r=>r.c).length>=rows.length/2?1:0};
-    if(depth>=cfg.depth||base.imp===0||rows.length<cfg.minLeaf*2)return base;
-    const choices=candidateSplits(rows,cfg.criterion,cfg.minLeaf);let best=forcedRoot&&depth===0?choices.find(c=>c.feature===forcedRoot.feature&&Math.abs(c.t-forcedRoot.t)<.01):choices[0];
-    if(!best)return base; return {...base,split:best,left:buildTree(best.left,depth+1,cfg),right:buildTree(best.right,depth+1,cfg)};
-  }
-  function leaves(tree){return tree.split?[...leaves(tree.left),...leaves(tree.right)]:[tree]}
-  function accuracy(tree, rows){const predict=p=>{let n=tree;while(n.split)n=p[n.split.feature]<=n.split.t?n.left:n.right;return n.class};return rows.filter(p=>predict(p)===p.c).length/rows.length}
-  function treeLab() {
-    const cfg=state.tree, choices=candidateSplits(treePoints,cfg.criterion,cfg.minLeaf), tree=buildTree(treePoints,0,cfg,cfg.manualRoot), auto=buildTree(treePoints,0,cfg), validation=[{x:2,y:2,c:0},{x:7,y:2,c:1},{x:2,y:7,c:1},{x:7,y:7,c:0},{x:5,y:6,c:1},{x:4,y:3,c:0}], manualAcc=accuracy(tree,validation),autoAcc=accuracy(auto,validation);
-    const bubble=(title,content,math)=>`<div class="bubble"><div class="bubble-title"><span>${title}</span>${math?'<button class="math" data-math="'+math+'">математика ↗</button>':''}</div>${content}</div>`;
-    const left=bubble('Критерий impurity',`<select data-tree="criterion"><option value="gini" ${cfg.criterion==='gini'?'selected':''}>Gini</option><option value="entropy" ${cfg.criterion==='entropy'?'selected':''}>Entropy</option></select>`,'impurity')+bubble('Максимальная глубина',`<div class="range-line"><input data-tree="depth" type="range" min="1" max="3" step="1" value="${cfg.depth}"><span class="range-value">${cfg.depth}</span></div>`)+bubble('Минимум в листе',`<div class="range-line"><input data-tree="minLeaf" type="range" min="1" max="3" step="1" value="${cfg.minLeaf}"><span class="range-value">${cfg.minLeaf}</span></div>`);
-    const candidates=choices.slice(0,4).map((c,i)=>`<button class="candidate" data-candidate="${i}">${c.feature==='x'?'признак 1':'признак 2'} ≤ ${c.t.toFixed(1)} <span class="score">Δ ${c.drop.toFixed(3)}</span></button>`).join('');
-    const right=bubble('Кандидатные split’ы',candidates,'split')+bubble('Валидация',`<div class="empty-note">Твоё дерево: <span class="score">${(manualAcc*100).toFixed(0)}%</span><br>Автоматическое: <span class="score">${(autoAcc*100).toFixed(0)}%</span></div>`);
-    const sx=x=>35+x/10*265,sy=y=>290-y/10*255; const dots=treePoints.map(p=>`<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="5" fill="${p.c?'#87dbaa':'#ff7272'}"/>`).join('');
-    const nodes=[]; (function walk(n,label='root'){nodes.push(`<div class="tree-node">${label}: ${n.split?(n.split.feature==='x'?'x₁':'x₂')+' ≤ '+n.split.t.toFixed(1):n.class?'зелёный лист':'красный лист'}<small>impurity ${n.imp.toFixed(3)} / n=${n.rows.length}</small></div>`);if(n.split){walk(n.left,'лево');walk(n.right,'право')}})(tree);
-    return shell(`<section class="lab-shell"><div class="lab-top"><div class="lab-name"><button class="back" data-action="map">← карта</button><h2>Решающее дерево</h2></div><span class="lab-status">split’ы / impurity / глубина</span></div><div class="lab-grid"><aside class="bubbles">${left}</aside><section class="visual"><div class="visual-head"><span>дерево глубины ${cfg.depth}</span><span class="metric">${cfg.criterion}</span></div><div class="tree-layout"><div class="tree-box"><svg viewBox="0 0 330 320" role="img" aria-label="Данные двух классов"><path class="grid" d="M35 35H300M35 99H300M35 163H300M35 227H300M35 290H300M35 35V290M101 35V290M167 35V290M233 35V290M300 35V290"/>${tree.split?`<path class="near" d="M${tree.split.feature==='x'?sx(tree.split.t):35} ${tree.split.feature==='x'?35:sy(tree.split.t)}${tree.split.feature==='x'?'V290':'H300'}"/>`:''}${dots}</svg></div><div class="tree-box tree-nodes">${nodes.join('')}</div></div><div class="lab-controls"><button class="secondary" data-action="tree-auto">Автопостроение</button><button class="secondary" data-action="tree-reset">Сбросить выбор</button></div><div class="math-card" id="math-card" hidden></div></section><aside class="bubbles">${right}</aside></div></section>`);
-  }
-  function mathText(type){return {dataset:'Это крайний учебный пример: на линейных данных прямая может хорошо описать зависимость, на нелинейных — систематически ошибается.',weight:'Модель предсказывает ŷ = w·x + b. Вес w меняет наклон, а b сдвигает прямую целиком.',gradient:'Для MSE градиент по весу: ∂L/∂w = (2/n)Σ(ŷᵢ − yᵢ)xᵢ. Шаг: w ← w − learning rate · ∂L/∂w.',regularization:'L2 добавляет λw² к функции потерь. Градиент получает добавку 2λw и не даёт весу расти без причины.',knn:'KNN голосует классом ближайших k наблюдений. У выбранной точки это реально пересчитывается при каждом изменении k.',scaling:'Расстояние чувствительно к масштабу. Признак со значениями 0–120 может почти целиком определить соседство, даже если он не важнее другого.',metric:'Евклидова метрика — √(Δx²+Δy²), манхэттенская — |Δx|+|Δy|.',impurity:'Gini = 1 − Σpₖ². Чем чище классы в узле, тем ближе impurity к нулю.',split:'Каждый кандидат делит реальные точки на две группы. Мы считаем взвешенное impurity после split’а и показываем его уменьшение Δ.'}[type]||'';}
-  function render() { app.innerHTML = state.view==='landing'?landing():state.view==='map'?mapView():state.lab==='linear'?linearLab():state.lab==='knn'?knnLab():treeLab(); bind(); persist(); }
-  function openMath(type){const card=document.querySelector('#math-card'); if(!card)return; card.hidden=false;card.innerHTML=`<button aria-label="Закрыть">×</button><b>Почему так:</b> ${mathText(type)}`;card.querySelector('button').onclick=()=>card.hidden=true;}
-  function updateLinear(){const m=state.linear,d=linearSets[m.dataset].points,n=d.length;let dw=0,db=0;d.forEach(([x,y])=>{const e=m.w*x+m.b-y;dw+=e*x;db+=e});dw=2*dw/n+2*m.reg*m.w;db=2*db/n;m.w-=m.lr*dw;m.b-=m.lr*db;m.steps++;}
-  function bind(){
-    app.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>{const a=el.dataset.action;if(a==='home')state.view='landing';if(a==='map')state.view='map';if(a==='demo'){state.view='lab';state.lab='linear'}if(a==='open-selected'&&state.selectedMap){state.view='lab';state.lab=state.selectedMap}if(a==='linear-reset')state.linear={dataset:state.linear.dataset,w:0,b:0,lr:state.linear.lr,reg:state.linear.reg,steps:0};if(a==='linear-step')updateLinear();if(a==='linear-train'){for(let i=0;i<300;i++)updateLinear()}if(a==='knn-toggle')state.knn.scaling=!state.knn.scaling;if(a==='tree-auto')state.tree.manualRoot=null;if(a==='tree-reset')state.tree.manualRoot=null;render()}));
-    app.querySelectorAll('[data-select-lab]').forEach(el=>el.addEventListener('click',()=>{state.selectedMap=el.dataset.selectLab;render()}));
-    app.querySelectorAll('[data-linear]').forEach(el=>{
-      const update=()=>{const key=el.dataset.linear;state.linear[key]=key==='dataset'?el.value:Number(el.value);const value=el.closest('.range-line')?.querySelector('.range-value');if(value)value.textContent=key==='lr'||key==='reg'?Number(el.value).toFixed(2):Number(el.value).toFixed(1);};
-      if(el.type==='range'){el.addEventListener('input',update);el.addEventListener('change',()=>{update();render()});}else el.addEventListener('change',()=>{update();state.linear.w=0;state.linear.b=0;state.linear.steps=0;render()});
-    });
-    app.querySelectorAll('[data-knn]').forEach(el=>{
-      const update=()=>{const k=el.dataset.knn;state.knn[k]=k==='k'?Number(el.value):k==='scaling'?el.value==='true':el.value;const value=el.closest('.range-line')?.querySelector('.range-value');if(value)value.textContent=el.value;};
-      if(el.type==='range'){el.addEventListener('input',update);el.addEventListener('change',()=>{update();render()});}else el.addEventListener('change',()=>{update();render()});
-    });
-    app.querySelectorAll('[data-tree]').forEach(el=>{
-      const update=()=>{const k=el.dataset.tree;state.tree[k]=k==='criterion'?el.value:Number(el.value);state.tree.manualRoot=null;const value=el.closest('.range-line')?.querySelector('.range-value');if(value)value.textContent=el.value;};
-      if(el.type==='range'){el.addEventListener('input',update);el.addEventListener('change',()=>{update();render()});}else el.addEventListener('change',()=>{update();render()});
-    });
-    app.querySelectorAll('[data-math]').forEach(el=>el.addEventListener('click',()=>openMath(el.dataset.math)));
-    app.querySelectorAll('[data-candidate]').forEach(el=>el.addEventListener('click',()=>{const choices=candidateSplits(treePoints,state.tree.criterion,state.tree.minLeaf);state.tree.manualRoot=choices[Number(el.dataset.candidate)];render()}));
-  }
+  setRangeProgress();
+}
+
+function go(route, section = null, animation = 'page-enter') {
+  stopDemoAnimation();
+  stopTreeAnimation();
+  store.set({ route });
   render();
-})();
+  app.classList.remove('page-enter', 'onboarding-swipe');
+  void app.offsetWidth;
+  app.classList.add(animation);
+  if (section) {
+    window.requestAnimationFrame(() => {
+      document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  } else {
+    // Новый экран не должен наследовать позицию длинной теоретической статьи:
+    // иначе пользователь возвращается в середину пустого фона, а верхние
+    // контролы двигаются во время восстановления scroll position.
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }
+}
+
+function stopDemoAnimation() {
+  if (demoTimer) window.clearInterval(demoTimer);
+  demoTimer = null;
+}
+
+function stopTreeAnimation() {
+  if (treeTimer) window.clearInterval(treeTimer);
+  treeTimer = null;
+}
+
+function setRangeProgress(input) {
+  const controls = input ? [input] : app.querySelectorAll('.range-control');
+  controls.forEach(control => {
+    const minimum = Number(control.min);
+    const maximum = Number(control.max);
+    const value = Number(control.value);
+    const percent = ((value - minimum) / (maximum - minimum)) * 100;
+    control.style.setProperty('--range-progress', `${percent}%`);
+  });
+}
+
+function formatControlValue(scope, key, value) {
+  if (scope === 'linear' && (key === 'lr' || key === 'reg')) return Number(value).toFixed(2);
+  if (scope === 'logistic' && (key === 'lr' || key === 'reg')) return Number(value).toFixed(2);
+  if (scope === 'linear') return Number(value).toFixed(1);
+  return String(value);
+}
+
+function refreshLinearVisual() {
+  const model = store.get().linear;
+  const dataset = linearDatasets[model.dataset];
+  const weights = Array.isArray(model.w) ? model.w : [model.w];
+  const gradients = linearGradients(model, dataset.rows);
+  const format = value => Math.abs(value) >= 1000 ? value.toExponential(2) : value.toFixed(3);
+  const trainLoss = meanSquaredError(dataset.rows, model.w, model.b);
+  const validationLoss = meanSquaredError(dataset.validation, model.w, model.b);
+  const convergence = linearConvergence(model, dataset.rows);
+  const isConverged = model.converged || convergence.converged;
+  const loss = app.querySelector('[data-linear-loss]');
+  const datasetName = app.querySelector('[data-linear-dataset-label]');
+  const equation = app.querySelector('[data-linear-equation]');
+  const stepCount = app.querySelector('[data-linear-steps]');
+  const convergenceStatus = app.querySelector('[data-linear-convergence]');
+  if (loss) loss.textContent = `train MSE ${format(trainLoss)}`;
+  if (datasetName) datasetName.textContent = `датасет / ${dataset.label}`;
+  weights.forEach((weight, index) => {
+    const weightValue = app.querySelector(`[data-linear-weight="${index}"]`);
+    const gradientValue = app.querySelector(`[data-linear-gradient="${index}"]`);
+    if (weightValue) weightValue.textContent = format(weight);
+    if (gradientValue) gradientValue.textContent = format(gradients.weights[index]);
+  });
+  const bias = app.querySelector('[data-linear-bias]');
+  const biasGradient = app.querySelector('[data-linear-bias-gradient]');
+  const trainMetric = app.querySelector('[data-linear-train-loss]');
+  const validationMetric = app.querySelector('[data-linear-validation-loss]');
+  if (bias) bias.textContent = format(model.b);
+  if (biasGradient) biasGradient.textContent = format(gradients.bias);
+  if (trainMetric) trainMetric.textContent = format(trainLoss);
+  if (validationMetric) validationMetric.textContent = format(validationLoss);
+  if (stepCount) stepCount.textContent = model.steps;
+  if (convergenceStatus) {
+    const copy = model.stopReason === 'limit'
+      ? `предел 5 000 шагов · ∥∇J∥ ${convergence.gradientNorm.toExponential(2)}`
+      : model.stopReason === 'diverged'
+        ? 'расходится · уменьши learning rate'
+        : isConverged
+          ? `сошлось · ∥∇J∥ ${convergence.gradientNorm.toExponential(2)}`
+          : `поиск минимума · ∥∇J∥ ${convergence.gradientNorm.toExponential(2)}`;
+    convergenceStatus.textContent = copy;
+    convergenceStatus.dataset.linearConverged = String(isConverged);
+    convergenceStatus.dataset.linearStopReason = model.stopReason || '';
+  }
+  if (equation) equation.textContent = `${dataset.targetName} = ${weights.map((weight, index) => `${format(weight)}·${dataset.equationNames[index]}`).join(' + ')} + ${format(model.b)}`;
+}
+
+function refreshDemoVisual() {
+  const model = store.get().linear;
+  const { points } = getLinearChartData({ ...model, dataset: 'linear' });
+  const line = app.querySelector('[data-linear-line="demo"]');
+  const loss = app.querySelector('[data-demo-loss]');
+  if (line) line.setAttribute('d', linearLinePath(points, model.w, model.b));
+  if (loss) loss.textContent = `MSE ${meanSquaredError(points, model.w, model.b).toFixed(3)}`;
+}
+
+function refreshKnnVisual() {
+  render();
+}
+
+function selectLinearDataset(datasetId) {
+  const dataset = linearDatasets[datasetId];
+  if (!dataset) return;
+  const initialWeights = dataset.featureNames.length === 1 ? 0 : Array(dataset.featureNames.length).fill(0);
+  store.patch('linear', { dataset: datasetId, w: initialWeights, b: 0, steps: 0, converged: false, stopReason: null });
+  render();
+}
+
+function setControlValue(input, shouldRender) {
+  const [scope, key] = input.dataset.control.split('.');
+  let value = input.value;
+  if (input.tagName === 'SELECT') {
+  } else {
+    value = Number(value);
+  }
+
+  if (scope === 'linear' && key === 'dataset') {
+    return selectLinearDataset(value);
+  }
+
+  if (scope === 'tree') {
+    stopTreeAnimation();
+    store.patch(scope, { [key]: value, manualRoot: null, visibleNodes: null, selectedNode: null });
+  } else {
+    store.patch(scope, scope === 'linear'
+      ? { [key]: value, converged: false, stopReason: null }
+      : { [key]: value });
+  }
+  if (input.type === 'range') {
+    setRangeProgress(input);
+    const output = app.querySelector(`[data-output="${input.dataset.control}"]`);
+    if (output) output.textContent = formatControlValue(scope, key, value);
+    if (scope === 'linear') refreshLinearVisual();
+    if (scope === 'knn') return refreshKnnVisual();
+  }
+  if (shouldRender) render();
+}
+
+function animateDemo() {
+  stopDemoAnimation();
+  store.patch('linear', { dataset: 'linear', w: [-1.6, 0, 0], b: 4.1, lr: .08, reg: 0, steps: 0 });
+  refreshDemoVisual();
+  let ticks = 0;
+  demoTimer = window.setInterval(() => {
+    const current = store.get().linear;
+    const next = gradientStep(current, getLinearChartData(current).points);
+    store.patch('linear', next);
+    refreshDemoVisual();
+    ticks += 1;
+    if (ticks >= 48) {
+      stopDemoAnimation();
+      window.setTimeout(() => {
+        // Демо заканчивается обученной прямой, а самостоятельный алгоритм начинается с чистого эксперимента.
+        store.patch('linear', { dataset: 'linear', w: [0, 0, 0], b: 0, lr: .08, reg: .02, steps: 0 });
+        go('signup', null, 'onboarding-swipe');
+      }, 350);
+    }
+  }, 28);
+}
+
+function openSelectedModule() {
+  const selected = moduleCatalog.find(item => item.id === store.get().selectedModule);
+  if (!selected) return;
+  go(selected.available ? selected.id : 'unavailable');
+}
+
+function animateTreeBuild() {
+  stopTreeAnimation();
+  const settings = store.get().tree;
+  const automaticTree = buildTree(treePoints, 0, { ...settings, manualRoot: null });
+  const total = countTreeNodes(automaticTree);
+  let visible = 1;
+  store.patch('tree', { manualRoot: null, visibleNodes: visible, selectedNode: null });
+  render();
+  treeTimer = window.setInterval(() => {
+    visible += 1;
+    store.patch('tree', { visibleNodes: visible });
+    render();
+    if (visible >= total) stopTreeAnimation();
+  }, 260);
+}
+
+function openDataset(kind) {
+  const returnRoute = store.get().route;
+  stopTreeAnimation();
+  store.set({ route: 'dataset-profile', datasetProfile: { kind, returnRoute } });
+  render();
+  app.classList.remove('page-enter', 'onboarding-swipe');
+  void app.offsetWidth;
+  app.classList.add('page-enter');
+}
+
+function selectTreeNode(nodeId) {
+  const tree = store.get().tree;
+  store.patch('tree', { selectedNode: nodeId });
+  app.querySelectorAll('[data-tree-node]').forEach(node => {
+    node.classList.toggle('active', node.dataset.treeNode === nodeId);
+  });
+  const structure = app.querySelector('.tree-structure');
+  if (!structure) return;
+  structure.querySelector('.tree-node-popover')?.remove();
+  const popover = treeNodePopover({ ...tree, selectedNode: nodeId }, nodeId);
+  if (popover) structure.insertAdjacentHTML('beforeend', popover);
+}
+
+function closeTreeNode() {
+  store.patch('tree', { selectedNode: null });
+  app.querySelectorAll('[data-tree-node]').forEach(node => node.classList.remove('active'));
+  app.querySelector('.tree-node-popover')?.remove();
+}
+
+function handleAction(action, source) {
+  const state = store.get();
+  if (action === 'toggle-theory-index') {
+    store.set({ theoryIndexCollapsed: !state.theoryIndexCollapsed });
+    return render();
+  }
+  if (action === 'start-learning') return go('demo');
+  if (action === 'demo-train') return animateDemo();
+  if (action === 'skip-signup') return go('map');
+  if (action === 'open-module') return openSelectedModule();
+  if (action === 'linear-reset') {
+    const dataset = linearDatasets[state.linear.dataset];
+    store.patch('linear', { w: dataset.featureNames.length === 1 ? 0 : Array(dataset.featureNames.length).fill(0), b: 0, steps: 0, converged: false, stopReason: null });
+    return refreshLinearVisual();
+  }
+  if (action === 'linear-step') {
+    const model = store.get().linear;
+    const rows = linearDatasets[model.dataset].rows;
+    const current = linearConvergence(model, rows);
+    if (model.converged || current.converged) {
+      store.patch('linear', { converged: true, stopReason: 'gradient' });
+      return refreshLinearVisual();
+    }
+    const next = gradientStep(model, rows);
+    const nextState = linearConvergence(next, rows);
+    const nextLoss = meanSquaredError(rows, next.w, next.b);
+    store.patch('linear', {
+      ...next,
+      converged: nextState.converged,
+      stopReason: !Number.isFinite(nextLoss) ? 'diverged' : nextState.converged ? 'gradient' : null
+    });
+    return refreshLinearVisual();
+  }
+  if (action === 'linear-train') {
+    const model = store.get().linear;
+    const dataset = linearDatasets[model.dataset];
+    store.patch('linear', trainLinear(model, dataset.rows));
+    return refreshLinearVisual();
+  }
+  if (action === 'logistic-reset') {
+    store.patch('logistic', { w: [.3, -.2], b: 0, steps: 0, converged: false });
+    return render();
+  }
+  if (action === 'logistic-step') {
+    store.patch('logistic', logisticStep(logisticRows, state.logistic));
+    return render();
+  }
+  if (action === 'logistic-train') {
+    store.patch('logistic', trainLogistic(logisticRows, state.logistic));
+    return render();
+  }
+  if (action === 'close-knn-details') {
+    store.patch('knn', { selectedPoint: null });
+    return render();
+  }
+  if (action === 'tree-auto') {
+    return animateTreeBuild();
+  }
+  if (action === 'tree-reset') {
+    stopTreeAnimation();
+    store.patch('tree', { manualRoot: null, visibleNodes: null, selectedNode: null });
+    return render();
+  }
+  if (action === 'svm-reset') {
+    store.patch('svm', { w: [0, 0], b: 0, steps: 0 });
+    return render();
+  }
+  if (action === 'svm-step') {
+    store.patch('svm', svmStep(svmPoints, state.svm));
+    return render();
+  }
+  if (action === 'svm-train') {
+    store.patch('svm', trainSvm(svmPoints, state.svm));
+    return render();
+  }
+  if (action === 'close-tree-node') {
+    return closeTreeNode();
+  }
+  if (action === 'show-dataset') return openDataset(source.dataset.dataset);
+}
+
+app.addEventListener('click', event => {
+  const theoryButton = event.target.closest('[data-theory-route]');
+  if (theoryButton) return go(theoryButton.dataset.theoryRoute, theoryButton.dataset.theorySection);
+
+  const routeButton = event.target.closest('[data-route]');
+  if (routeButton) return go(routeButton.dataset.route);
+
+  const moduleButton = event.target.closest('[data-select-module]');
+  if (moduleButton) {
+    store.set({ selectedModule: moduleButton.dataset.selectModule });
+    return render();
+  }
+
+  const linearDatasetButton = event.target.closest('[data-linear-dataset]');
+  if (linearDatasetButton) return selectLinearDataset(linearDatasetButton.dataset.linearDataset);
+
+  const knnPoint = event.target.closest('[data-knn-point]');
+  if (knnPoint) {
+    store.patch('knn', { selectedPoint: Number(knnPoint.dataset.knnPoint) });
+    return render();
+  }
+
+  const knnTarget = event.target.closest('[data-knn-target]');
+  if (knnTarget) {
+    store.patch('knn', { selectedPoint: null });
+    return render();
+  }
+
+  const treeNode = event.target.closest('[data-tree-node]');
+  if (treeNode) {
+    return selectTreeNode(treeNode.dataset.treeNode);
+  }
+
+  const actionButton = event.target.closest('[data-action]');
+  if (actionButton) handleAction(actionButton.dataset.action, actionButton);
+
+});
+
+app.addEventListener('input', event => {
+  const input = event.target;
+  if (input.matches('.range-control')) setControlValue(input, false);
+});
+
+app.addEventListener('change', event => {
+  const control = event.target;
+  if (control.matches('select[data-control]')) setControlValue(control, true);
+  if (control.matches('.range-control') && (control.dataset.control.startsWith('tree.') || control.dataset.control.startsWith('logistic.'))) render();
+});
+
+app.addEventListener('submit', event => {
+  const form = event.target.closest('form[data-form]');
+  if (!form) return;
+  event.preventDefault();
+  const details = new FormData(form);
+  store.patch('profile', { fullName: details.get('fullName').trim(), email: details.get('email').trim() });
+  go(form.dataset.form === 'signup' ? 'map' : 'profile');
+});
+
+app.addEventListener('change', event => {
+  if (!event.target.matches('[data-avatar]')) return;
+  const [file] = event.target.files;
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener('load', () => {
+    store.patch('profile', { avatar: reader.result });
+    render();
+  });
+  reader.readAsDataURL(file);
+});
+
+render();
