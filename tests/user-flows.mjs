@@ -111,6 +111,29 @@ try {
   if (!(await page.locator('#linear-regularization-deep').innerText()).includes('variance')) throw new Error('Linear theory must explain why regularisation can improve validation quality');
   if (!(await page.locator('#linear-causality').innerText()).includes('do(X=x)')) throw new Error('Linear theory must distinguish prediction from intervention');
   if (!(await page.locator('#linear-bayes').innerText()).includes('MAP')) throw new Error('Linear theory must derive the Bayesian reading of ridge');
+  const chapterAudit = await page.evaluate(() => {
+    const sections = [...document.querySelectorAll('.theory-sheet > section.algorithm-section')];
+    const links = [...document.querySelectorAll('.theory-index nav a')];
+    return {
+      count: sections.length,
+      groups: document.querySelectorAll('.theory-index-group').length,
+      everyLinkResolves: links.every(link => document.querySelectorAll(link.getAttribute('href')).length === 1),
+      everySectionListed: sections.every(section => links.some(link => link.hash === `#${section.id}`)),
+      nestedSections: document.querySelectorAll('.algorithm-section .algorithm-section').length,
+      hasOverflow: document.documentElement.scrollWidth > innerWidth + 1
+    };
+  });
+  if (chapterAudit.count !== 37 || chapterAudit.groups !== 6 || !chapterAudit.everyLinkResolves || !chapterAudit.everySectionListed || chapterAudit.nestedSections || chapterAudit.hasOverflow) throw new Error(`Linear chapter structure is invalid: ${JSON.stringify(chapterAudit)}`);
+  for (const id of ['linear-scalar-proof', 'linear-analytic', 'linear-noise-laws', 'linear-gauss-markov', 'linear-prediction']) {
+    await page.locator(`.theory-index a[href="#${id}"]`).click();
+    await page.waitForFunction(sectionId => {
+      const rect = document.getElementById(sectionId).getBoundingClientRect();
+      return rect.top >= 0 && rect.top < 150;
+    }, id);
+  }
+  await page.locator('.theory-index a[href="#linear-practice"]').click();
+  await page.locator('.math-exercise').nth(1).locator('summary').click();
+  if (!await page.locator('.math-exercise').nth(1).getAttribute('open').then(value => value !== null)) throw new Error('Theory self-check solution must open without leaving the algorithm page');
   await page.locator('[data-action="toggle-theory-index"]').click();
   if (!(await page.locator('.theory-layout').getAttribute('class')).includes('is-index-collapsed')) throw new Error('Theory outline must collapse from its own control');
   if (await page.locator('.theory-index-content').isVisible()) throw new Error('Collapsed theory outline must release reading space');
