@@ -1,0 +1,209 @@
+{
+  "sourceHash": "e242d07a9544b86523ad83e5d5790b5b3fd7b61510f93558a05b6854de56f993",
+  "source": "src/theory.js + src/linear-theory.js",
+  "paragraphCount": 207,
+  "formulaCount": 134,
+  "sectionCount": 37,
+  "chapters": [
+    {
+      "id": "linear",
+      "title": "Линейная регрессия",
+      "sections": [
+        {
+          "id": "linear-intro",
+          "title": "Одна модель. Три разных вопроса.",
+          "formulas": 0
+        },
+        {
+          "id": "linear-notation",
+          "title": "Наблюдения, параметры и случайные величины",
+          "formulas": 0
+        },
+        {
+          "id": "linear-model",
+          "title": "Линейность относится к параметрам",
+          "formulas": 1
+        },
+        {
+          "id": "linear-objective",
+          "title": "Квадратичная ошибка и роль смещения",
+          "formulas": 1
+        },
+        {
+          "id": "linear-scalar-proof",
+          "title": "Находим прямую через частные производные",
+          "formulas": 10
+        },
+        {
+          "id": "linear-covariance",
+          "title": "Наклон — совместное изменение, делённое на разброс",
+          "formulas": 6
+        },
+        {
+          "id": "linear-worked-example",
+          "title": "Числа, которые можно проверить вручную",
+          "formulas": 1
+        },
+        {
+          "id": "linear-analytic",
+          "title": "Normal equations: от дифференциала к весам",
+          "formulas": 8
+        },
+        {
+          "id": "linear-rank",
+          "title": "Когда веса не единственны",
+          "formulas": 7
+        },
+        {
+          "id": "linear-projection",
+          "title": "Почему остаток перпендикулярен признакам",
+          "formulas": 5
+        },
+        {
+          "id": "linear-gradient-derivation",
+          "title": "Что вычисляет кнопка «Один шаг»",
+          "formulas": 6
+        },
+        {
+          "id": "gradient-direction-proof",
+          "title": "Локальное направление убывания",
+          "formulas": 3
+        },
+        {
+          "id": "linear-gradient",
+          "title": "Learning rate ограничивает спектр",
+          "formulas": 6
+        },
+        {
+          "id": "linear-conditioning",
+          "title": "Почему похожие признаки замедляют обучение",
+          "formulas": 0
+        },
+        {
+          "id": "gradient-variants",
+          "title": "Число шагов и число просмотренных объектов",
+          "formulas": 1
+        },
+        {
+          "id": "linear-probability",
+          "title": "Случайный шум не обязан быть нормальным",
+          "formulas": 4
+        },
+        {
+          "id": "linear-loss-derivation",
+          "title": "Вывод максимального правдоподобия",
+          "formulas": 5
+        },
+        {
+          "id": "linear-noise-laws",
+          "title": "Выбор плотности меняет функцию потерь",
+          "formulas": 10
+        },
+        {
+          "id": "linear-estimator",
+          "title": "Насколько случайны найденные коэффициенты",
+          "formulas": 5
+        },
+        {
+          "id": "linear-gauss-markov",
+          "title": "В каком смысле МНК оптимален",
+          "formulas": 6
+        },
+        {
+          "id": "linear-inference",
+          "title": "От остатков к статистической неопределённости",
+          "formulas": 8
+        },
+        {
+          "id": "linear-prediction",
+          "title": "Почему предиктивный интервал шире",
+          "formulas": 2
+        },
+        {
+          "id": "linear-heteroskedasticity",
+          "title": "Взвешивание и корректные стандартные ошибки",
+          "formulas": 6
+        },
+        {
+          "id": "linear-consistency",
+          "title": "Чего не исправит большая выборка",
+          "formulas": 4
+        },
+        {
+          "id": "linear-regularization",
+          "title": "Добавляем штраф, сохраняя свободный член",
+          "formulas": 4
+        },
+        {
+          "id": "linear-regularization-deep",
+          "title": "За устойчивость платим смещением",
+          "formulas": 2
+        },
+        {
+          "id": "linear-lasso-geometry",
+          "title": "Почему L1 может дать ровно нулевой вес",
+          "formulas": 7
+        },
+        {
+          "id": "linear-bayes",
+          "title": "MAP и распределение весов после данных",
+          "formulas": 6
+        },
+        {
+          "id": "linear-bias-variance",
+          "title": "Доказательство bias² + variance + noise",
+          "formulas": 4
+        },
+        {
+          "id": "linear-feature-map",
+          "title": "Когда прямая — слишком узкая гипотеза",
+          "formulas": 0
+        },
+        {
+          "id": "linear-loss-catalog",
+          "title": "Среднее, медиана и квантиль отвечают на разные вопросы",
+          "formulas": 4
+        },
+        {
+          "id": "linear-validation",
+          "title": "От доказанного минимума к полезному прогнозу",
+          "formulas": 0
+        },
+        {
+          "id": "linear-risk",
+          "title": "Риск — ожидание по будущим объектам",
+          "formulas": 1
+        },
+        {
+          "id": "linear-diagnostics",
+          "title": "Что смотреть после обучения",
+          "formulas": 1
+        },
+        {
+          "id": "linear-causality",
+          "title": "Коэффициент и причинное воздействие",
+          "formulas": 0
+        },
+        {
+          "id": "linear-practice",
+          "title": "Три коротких вывода своими руками",
+          "formulas": 0
+        },
+        {
+          "id": "linear-sources",
+          "title": "Где продолжить разбор",
+          "formulas": 0
+        }
+      ]
+    }
+  ],
+  "audit": {
+    "sections": 37,
+    "math": 134,
+    "mathErrors": [],
+    "overflow": [],
+    "brokenLinks": [],
+    "nestedSections": 0,
+    "figures": 3
+  }
+}
