@@ -1,6 +1,6 @@
 import { linearDatasets, knnClassNames, knnFeatureNames, knnPoints, knnTarget, knnTargetName, logisticClassNames, logisticFeatureNames, logisticRows, logisticTargetName, treeFeatureNames, treePoints, treeTargetName, treeValidation, moduleCatalog, svmClassNames, svmFeatureNames, svmPoints, svmTargetName } from './data.js?v=20260915-ml5';
 import { meanSquaredError, linearConvergence, linearGradients, findNeighbors, knnPrediction, buildTree, treeAccuracy, binaryCrossEntropy, logisticAccuracy, logisticGradients, logisticProbability, logisticScore, sigmoid, svmAccuracy, svmGradients, svmMargin, svmObjective, svmScore } from './algorithms.js?v=20260915-ml5';
-import { theoryPages } from './theory.js?v=20260915-ml5';
+import { theoryPages } from './theory.js?v=20261019-math';
 
 export function escapeHTML(value) {
   return String(value).replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char]));
@@ -123,7 +123,12 @@ export function linearLab(model) {
 
 function theoryView(kind, indexCollapsed = false) {
   const page = theoryPages[kind];
-  const index = page.outline.map(([id, label]) => `<a href="#${id}">${label}</a>`).join('');
+  let previousGroup;
+  const index = page.outline.map(([id, label, group]) => {
+    const heading = group && group !== previousGroup ? `<strong class="theory-index-group">${group}</strong>` : '';
+    previousGroup = group;
+    return `${heading}<a href="#${id}">${label}</a>`;
+  }).join('');
   const theme = kind === 'tree' ? 'объяснимая классификация' : kind === 'knn' ? 'локальная классификация' : kind === 'svm' ? 'геометрическая классификация' : kind === 'logistic' ? 'вероятностная классификация' : 'регрессия и оптимизация';
   const collapseLabel = indexCollapsed ? 'Показать содержание' : 'Свернуть содержание';
   return `${nav()}<main class="theory-screen"><div class="theory-layout ${indexCollapsed ? 'is-index-collapsed' : ''}"><aside class="theory-index" aria-label="Содержание алгоритма"><button class="back theory-index-back" data-route="${page.route}">← к алгоритму</button><button class="theory-index-toggle" data-action="toggle-theory-index" aria-expanded="${String(!indexCollapsed)}" aria-label="${collapseLabel}" title="${collapseLabel}"><span aria-hidden="true">${indexCollapsed ? '›' : '‹'}</span></button><div class="theory-index-content"><span>${page.label}</span><nav>${index}</nav></div></aside><article class="theory-sheet"><div class="theory-top"><span>${page.label}</span><button class="back" data-route="${page.route}">к алгоритму →</button></div><header><div class="kicker">${theme}</div><h1>${page.title}</h1><p>${page.lead}</p></header>${page.content}</article></div></main>`;

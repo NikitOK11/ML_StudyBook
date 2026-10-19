@@ -88,6 +88,28 @@
 
 /* Учебный математический слой: обозначения появляются до формул, а каждый
    вывод читается как последовательность проверяемых переходов. */
+.theory-index nav{max-height:calc(100dvh - 265px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#635124 transparent}
+.theory-index-group{display:block;padding:18px 12px 6px;color:var(--amber);font-size:10px;line-height:1.6;letter-spacing:.08em;grid-column:1/-1}
+.theory-index-group:first-child{padding-top:2px}
+.theory-index a:focus-visible,.theory-reading a:focus-visible,.math-exercise summary:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+.math-table-scroll{margin-top:25px;max-width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.018)}
+.math-table{border-collapse:collapse;width:100%;min-width:560px;text-align:left;font-size:13px;line-height:1.65}
+.math-table caption{text-align:left;padding:18px;color:var(--amber);font-size:12px}
+.math-table th,.math-table td{padding:13px 16px;border-top:1px solid var(--line);vertical-align:top}
+.math-table thead th{color:#f8efd5;background:rgba(255,185,0,.05);font-weight:550}
+.math-table tbody th{color:#e2d6b6;font-weight:500}.math-table td{color:#bdbbc3}
+.math-figure .math-residual{stroke:#aaa5b8;stroke-width:2;stroke-dasharray:4 4}
+.math-figure .math-centroid{fill:#87dbaa;stroke:#c9f6dc;stroke-width:1.5}
+.math-figure .math-contour{stroke:#bbb6c3;stroke-width:1.5;fill:none}
+.math-figure .math-constraint{stroke:var(--amber);stroke-width:2;fill:rgba(255,185,0,.075)}
+.math-figure .noise-curve{fill:none;stroke-width:2.5}.noise-0{stroke:#ffb900}.noise-1{stroke:#87dbaa}.noise-2{stroke:#b6a1ec;stroke-dasharray:6 3}
+.math-figure .noise-label-0{fill:#ffb900}.math-figure .noise-label-1{fill:#87dbaa}.math-figure .noise-label-2{fill:#b6a1ec}
+.theory-block .theory-reading{font-size:13px;color:#9f9ba7}.theory-reading a{color:#efc352;text-underline-offset:4px}
+.math-exercise{margin-top:16px;border:1px solid var(--line);border-radius:14px;padding:18px 20px;background:rgba(255,185,0,.025)}
+.math-exercise summary{cursor:pointer;color:#eee6ce;font-size:15px;line-height:1.65}.math-exercise[open] summary{color:var(--amber)}
+.theory-block .equation-card>div{overflow-wrap:anywhere}
+@media(max-width:900px){.theory-index nav{max-height:360px}.math-figure text{font-size:12px}}
+@media(max-height:540px) and (min-width:901px){.theory-index{top:80px}.theory-index nav{max-height:200px}}
 .notation-card{margin-top:25px;padding:20px 21px;border:1px solid rgba(255,185,0,.24);border-radius:16px;background:linear-gradient(135deg,rgba(255,185,0,.065),rgba(255,255,255,.018) 62%)}
 .theory-block .formula{white-space:normal;border:1px solid rgba(255,185,0,.18);border-left:3px solid var(--amber);border-radius:0 13px 13px 0;background:linear-gradient(90deg,rgba(255,185,0,.075),rgba(255,255,255,.014));color:#fff0bf;overflow-wrap:anywhere}
 .notation-card-title,.derivation-title{color:var(--amber);font:10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase}

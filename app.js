@@ -24,7 +24,7 @@ import {
   treeNodePopover,
   treeTheoryView,
   unavailableView
-} from './src/views.js?v=20260915-ml5';
+} from './src/views.js?v=20261019-math';
 
 const app = document.getElementById('app');
 const store = createStore();
