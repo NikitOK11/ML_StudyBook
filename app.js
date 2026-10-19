@@ -24,7 +24,7 @@ import {
   treeNodePopover,
   treeTheoryView,
   unavailableView
-} from './src/views.js?v=20261019-math';
+} from './src/views.js?v=20261019-math-pdf';
 
 const app = document.getElementById('app');
 const store = createStore();

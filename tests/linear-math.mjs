@@ -97,4 +97,15 @@ const unstableStart={w:[.8+direction[1]],b:1.5+direction[0],reg:0,lr:2.1/muMax,s
 const unstable=gradientStep(unstableStart,rows);
 assert.ok(meanSquaredError(rows,unstable.w,unstable.b)>meanSquaredError(rows,unstableStart.w,unstableStart.b));
 
-console.log('Passed linear mathematics: worked example, finite-difference gradients, exact noise moments, Gauss–Markov, ridge/MAP scaling and spectral step bound.');
+// The L1 proof uses MSE without 1/2: its exact scalar threshold is lambda/2.
+for (const c of [-2, -.2, 0, .2, 2]) {
+  for (const lambda of [0, .3, 1]) {
+    const w = Math.sign(c) * Math.max(Math.abs(c) - lambda / 2, 0);
+    const loss = value => (value - c) ** 2 + lambda * Math.abs(value);
+    for (let value = -3; value <= 3; value += .01) assert.ok(loss(w) <= loss(value) + 1e-10);
+    if (w !== 0) close(2 * (w - c) + lambda * Math.sign(w), 0, 'Nonzero Lasso coordinate');
+    else assert.ok(2 * Math.abs(c) <= lambda + 1e-12, 'Zero Lasso coordinate subgradient');
+  }
+}
+
+console.log('Passed linear mathematics: worked example, finite-difference gradients, exact noise moments, Gauss–Markov, ridge/MAP scaling, Lasso threshold and spectral step bound.');

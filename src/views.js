@@ -1,6 +1,6 @@
 import { linearDatasets, knnClassNames, knnFeatureNames, knnPoints, knnTarget, knnTargetName, logisticClassNames, logisticFeatureNames, logisticRows, logisticTargetName, treeFeatureNames, treePoints, treeTargetName, treeValidation, moduleCatalog, svmClassNames, svmFeatureNames, svmPoints, svmTargetName } from './data.js?v=20260915-ml5';
 import { meanSquaredError, linearConvergence, linearGradients, findNeighbors, knnPrediction, buildTree, treeAccuracy, binaryCrossEntropy, logisticAccuracy, logisticGradients, logisticProbability, logisticScore, sigmoid, svmAccuracy, svmGradients, svmMargin, svmObjective, svmScore } from './algorithms.js?v=20260915-ml5';
-import { theoryPages } from './theory.js?v=20261019-math';
+import { theoryPages } from './theory.js?v=20261019-math-pdf';
 
 export function escapeHTML(value) {
   return String(value).replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char]));
