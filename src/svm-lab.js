@@ -1,5 +1,5 @@
 import { createSvmTrainer } from './svm-solver.js';
-import { drawSvmPlot, svmPointAt, svmPlotBounds } from './svm-plot.js';
+import { createSvmPlot, svmPointAt, svmPlotBounds } from './svm-plot.js';
 
 const presets = { blobs: 'Два облака', overlap: 'Пересечение', rings: 'Кольца', xor: 'XOR' };
 const kernels = { linear: 'Линейное', rbf: 'RBF', poly: 'Полиномиальное' };
@@ -69,8 +69,8 @@ export function svmPlaygroundView() {
       <aside class="svm-settings" aria-label="Настройки модели">
         <h2>Параметры модели</h2>
         <div class="svm-choices" role="group" aria-label="Ядро SVM">${choices('kernel', kernels, 'linear')}</div>
-        ${slider('penalty', 'Штраф C', -2, 2, .05, 0, '1,00')}
-        <div data-svm-gamma hidden>${slider('gamma', 'Параметр ядра γ', -2, 1, .05, -.15, '0,71')}</div>
+        ${slider('penalty', 'Штраф C', -2, 2, .01, 0, '1,00')}
+        <div data-svm-gamma hidden>${slider('gamma', 'Параметр ядра γ', -2, 1, .01, -.15, '0,71')}</div>
         <div data-svm-degree hidden>${slider('degree', 'Степень полинома', 2, 5, 1, 3, '3')}</div>
         <div class="svm-layers">
           <label><input type="checkbox" id="svm-show-margin" checked> Показать полосу зазора</label>
@@ -134,6 +134,8 @@ export function mountSvmPlayground(root) {
   const support = find('#svm-show-support');
   const number = new Intl.NumberFormat('ru', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
   const history = [];
+  const drawPlot = createSvmPlot(canvas);
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
   let seed = 42;
   let preset = 'blobs';
   let activePreset = preset;
@@ -144,6 +146,8 @@ export function mountSvmPlayground(root) {
   let trainer = null;
   let needsTraining = true;
   let model = null;
+  let modelPoints;
+  let modelKind;
 
   function select(name, selected) {
     root.querySelectorAll(`[data-svm-${name}]`).forEach(button => {
@@ -151,18 +155,23 @@ export function mountSvmPlayground(root) {
     });
   }
 
-  function paint() {
-    drawSvmPlot(canvas, points, model, { margin: margin.checked, support: support.checked, draft: Boolean(trainer) });
-  }
-
   function requestFrame() {
     if (frame === null) frame = requestAnimationFrame(update);
   }
 
-  function update() {
+  function update(timestamp) {
     frame = null;
     if (needsTraining) {
-      trainer = createSvmTrainer(points, { kind, C: 10 ** +penalty.value, gamma: 10 ** +gamma.value, degree: +degree.value });
+      const start = model?.ready && modelPoints === points && modelKind === kind ? model : undefined;
+      trainer = createSvmTrainer(points, {
+        kind,
+        C: 10 ** Number(penalty.value),
+        gamma: 10 ** Number(gamma.value),
+        degree: Number(degree.value),
+        start
+      });
+      modelPoints = points;
+      modelKind = kind;
       needsTraining = false;
     }
     if (trainer) {
@@ -181,8 +190,12 @@ export function mountSvmPlayground(root) {
         : model.limited ? 'Достигнут предел итераций' : 'Модель готова';
       if (status.textContent !== message) status.textContent = message;
     }
-    paint();
-    if (trainer) requestFrame();
+    const settling = drawPlot(points, model, {
+      margin: margin.checked,
+      support: support.checked,
+      animate: !motion.matches
+    }, timestamp);
+    if (trainer || settling) requestFrame();
   }
 
   function scheduleTraining() {

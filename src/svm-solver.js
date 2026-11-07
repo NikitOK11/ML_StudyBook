@@ -7,7 +7,26 @@ function kernel(a, b, kind, gamma, degree) {
   return kind === 'poly' ? (gamma * dot + 1) ** degree : dot;
 }
 
-export function createSvmTrainer(points, { C = 1, gamma = .7, degree = 3, kind = 'linear', maxSweeps = 240 } = {}) {
+function sampleRbfGrid(xs, ys, support, gamma, bias) {
+  const scores = ys.map(() => new Float64Array(xs.length).fill(bias));
+  const horizontal = new Float64Array(xs.length);
+  for (const vector of support) {
+    // The Gaussian factors along the two axes, so each exponential can be reused.
+    for (let column = 0; column < xs.length; column++) {
+      horizontal[column] = Math.exp(-gamma * (xs[column] - vector.x) ** 2);
+    }
+    for (let row = 0; row < ys.length; row++) {
+      const vertical = vector.alpha * vector.label * Math.exp(-gamma * (ys[row] - vector.y) ** 2);
+      const values = scores[row];
+      for (let column = 0; column < xs.length; column++) {
+        values[column] += horizontal[column] * vertical;
+      }
+    }
+  }
+  return scores;
+}
+
+export function createSvmTrainer(points, { C = 1, gamma = .7, degree = 3, kind = 'linear', maxSweeps = 240, start } = {}) {
   const count = points.length;
   const alpha = new Float64Array(count);
   const errors = Float64Array.from(points, point => -point.label);
@@ -23,6 +42,18 @@ export function createSvmTrainer(points, { C = 1, gamma = .7, degree = 3, kind =
   const tolerance = 1e-3;
   const indices = points.map((_, index) => index);
   let bias = 0;
+  if (start) {
+    // Scaling every coefficient keeps the dual equality feasible when C decreases.
+    const scale = Math.min(1, C / Math.max(...start.alpha));
+    bias = start.bias * scale;
+    for (let i = 0; i < count; i++) alpha[i] = start.alpha[i] * scale;
+    for (let i = 0; i < count; i++) {
+      errors[i] += bias;
+      for (let j = 0; j < count; j++) {
+        errors[i] += alpha[j] * points[j].label * matrix[i][j];
+      }
+    }
+  }
   let idleSweeps = 0;
   let sweeps = 0;
 
@@ -118,7 +149,14 @@ export function createSvmTrainer(points, { C = 1, gamma = .7, degree = 3, kind =
       };
     }
     const accuracy = ready ? points.filter(point => (predict(point) >= 0 ? 1 : -1) === point.label).length / count : null;
-    return { alpha: coefficients, support, predict, accuracy, ready, limited: done && idleSweeps < 12 && sweeps >= maxSweeps };
+    function sampleGrid(xs, ys) {
+      if (kind === 'rbf') return sampleRbfGrid(xs, ys, support, gamma, intercept);
+      return ys.map(y => Float64Array.from(xs, x => predict({ x, y })));
+    }
+    return {
+      alpha: coefficients, bias: intercept, support, predict, sampleGrid, accuracy, ready,
+      limited: done && idleSweeps < 12 && sweeps >= maxSweeps
+    };
   }
 
   return { step, snapshot, get done() { return done; } };
