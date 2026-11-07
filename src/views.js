@@ -1,6 +1,8 @@
+import { svmPlaygroundView } from './svm-lab.js';
+import { svmExercisesView } from './svm-study.js';
 import { linearDatasets, knnClassNames, knnFeatureNames, knnPoints, knnTarget, knnTargetName, logisticClassNames, logisticFeatureNames, logisticRows, logisticTargetName, treeFeatureNames, treePoints, treeTargetName, treeValidation, moduleCatalog, svmClassNames, svmFeatureNames, svmPoints, svmTargetName } from './data.js?v=20260915-ml5';
 import { meanSquaredError, linearConvergence, linearGradients, findNeighbors, knnPrediction, buildTree, treeAccuracy, binaryCrossEntropy, logisticAccuracy, logisticGradients, logisticProbability, logisticScore, sigmoid, svmAccuracy, svmGradients, svmMargin, svmObjective, svmScore } from './algorithms.js?v=20260915-ml5';
-import { theoryPages } from './theory.js?v=20261019-math-pdf';
+import { theoryPages } from './theory.js?v=svm-lab';
 
 export function escapeHTML(value) {
   return String(value).replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char]));
@@ -121,17 +123,34 @@ export function linearLab(model) {
   return labLayout('Линейная регрессия', 'batch gradient descent', left, `<div class="visual-head"><span data-linear-dataset-label>датасет / ${dataset.label}</span><div class="visual-head-actions"><button class="dataset-trigger" data-action="show-dataset" data-dataset="${model.dataset}">Показать датасет ↗</button><span class="metric" data-linear-loss>train MSE ${format(loss)}</span></div></div><div class="weights-stage"><section class="equation-card"><span>прогноз / ${dataset.targetName}</span><strong data-linear-equation>${dataset.targetName} = ${equation} + ${format(model.b)}</strong><small>шагов градиентного спуска: <i data-linear-steps>${model.steps}</i></small><small class="linear-convergence" data-linear-convergence data-linear-converged="${String(isConverged)}" data-linear-stop-reason="${model.stopReason || ''}">${convergenceCopy}</small></section><div class="weight-grid">${weightCards}<article class="weight-card bias"><span>b · смещение</span><strong data-linear-bias>${format(model.b)}</strong><small>градиент <i data-linear-bias-gradient>${format(gradients.bias)}</i></small></article></div><div class="linear-metrics"><span>train MSE <b data-linear-train-loss>${format(loss)}</b></span><span>validation MSE <b data-linear-validation-loss>${format(validationLoss)}</b></span></div>${warning}</div><div class="lab-controls"><button class="secondary" data-action="linear-reset">Сбросить веса</button><button class="secondary" data-action="linear-step">Один шаг</button><button class="primary" data-action="linear-train">До сходимости →</button></div>`, right);
 }
 
-function theoryView(kind, indexCollapsed = false) {
+function theoryView(kind, indexCollapsed = false, embedded = false) {
   const page = theoryPages[kind];
   let previousGroup;
-  const index = page.outline.map(([id, label, group]) => {
+  const outline = kind === 'svm' ? [...page.outline, ['svm-exercises', 'Задачи по SVM']] : page.outline;
+  const index = outline.map(([id, label, group]) => {
     const heading = group && group !== previousGroup ? `<strong class="theory-index-group">${group}</strong>` : '';
     previousGroup = group;
     return `${heading}<a href="#${id}">${label}</a>`;
   }).join('');
   const theme = kind === 'tree' ? 'объяснимая классификация' : kind === 'knn' ? 'локальная классификация' : kind === 'svm' ? 'геометрическая классификация' : kind === 'logistic' ? 'вероятностная классификация' : 'регрессия и оптимизация';
   const collapseLabel = indexCollapsed ? 'Показать содержание' : 'Свернуть содержание';
-  return `${nav()}<main class="theory-screen"><div class="theory-layout ${indexCollapsed ? 'is-index-collapsed' : ''}"><aside class="theory-index" aria-label="Содержание алгоритма"><button class="back theory-index-back" data-route="${page.route}">← к алгоритму</button><button class="theory-index-toggle" data-action="toggle-theory-index" aria-expanded="${String(!indexCollapsed)}" aria-label="${collapseLabel}" title="${collapseLabel}"><span aria-hidden="true">${indexCollapsed ? '›' : '‹'}</span></button><div class="theory-index-content"><span>${page.label}</span><nav>${index}</nav></div></aside><article class="theory-sheet"><div class="theory-top"><span>${page.label}</span><button class="back" data-route="${page.route}">к алгоритму →</button></div><header><div class="kicker">${theme}</div><h1>${page.title}</h1><p>${page.lead}</p></header>${page.content}</article></div></main>`;
+  const wrapper = embedded ? 'section' : 'main';
+  const back = embedded ? '<a class="back" href="#svm-playground">↑ к лаборатории</a>'
+    : `<button class="back theory-index-back" data-route="${page.route}">← к алгоритму</button>`;
+  const toggle = embedded ? '' : `<button class="theory-index-toggle" data-action="toggle-theory-index" aria-expanded="${String(!indexCollapsed)}" aria-label="${collapseLabel}" title="${collapseLabel}"><span aria-hidden="true">${indexCollapsed ? '›' : '‹'}</span></button>`;
+  return `${embedded ? '' : nav()}<${wrapper} class="theory-screen">
+    <div class="theory-layout ${indexCollapsed ? 'is-index-collapsed' : ''}">
+      <aside class="theory-index" aria-label="Содержание алгоритма">
+        ${back}${toggle}
+        <div class="theory-index-content"><span>${page.label}</span><nav>${index}</nav></div>
+      </aside>
+      <article class="theory-sheet">
+        <div class="theory-top"><span>${page.label}</span>${embedded ? '' : `<button class="back" data-route="${page.route}">к алгоритму →</button>`}</div>
+        <header>${embedded ? '' : `<div class="kicker">${theme}</div>`}<${embedded ? 'h2' : 'h1'}${embedded ? ' class="svm-theory-title"' : ''}>${page.title}</${embedded ? 'h2' : 'h1'}><p>${page.lead}</p></header>
+        ${page.content}${kind === 'svm' ? svmExercisesView() : ''}
+      </article>
+    </div>
+  </${wrapper}>`;
 }
 
 export const linearTheoryView = indexCollapsed => theoryView('linear', indexCollapsed);
@@ -256,14 +275,18 @@ function svmChart(model) {
   return `<svg class="chart-svg svm-chart" viewBox="0 0 750 450" role="img" aria-label="Линейный SVM: классы, разделяющая граница и зазор"><path class="grid" d="M80 75H670M80 138H670M80 201H670M80 264H670M80 327H670M80 390H670M80 75V390M198 75V390M316 75V390M434 75V390M552 75V390M670 75V390"/><path class="axis" d="M80 390H690M80 410V55"/>${boundary}${marks}<text x="94" y="50" fill="#99999f" font-size="13">${svmFeatureNames[1]}</text><text x="486" y="428" fill="#99999f" font-size="13">${svmFeatureNames[0]}</text><text x="96" y="427" fill="#99999f" font-size="11">${status}</text></svg>`;
 }
 
-export function svmLab(model) {
+export function svmLab() {
+  return `${nav()}<main class="svm-module">${svmPlaygroundView()}${theoryView('svm', false, true)}</main>`;
+}
+
+export function svmLinearLab(model) {
   const gradients = svmGradients(svmPoints, model);
   const objective = svmObjective(svmPoints, model);
   const accuracy = svmAccuracy(svmPoints, model);
   const supportCount = svmPoints.filter(point => svmMargin(point, model.w, model.b) <= 1.08).length;
   const left = bubble('Штраф за нарушения C', rangeControl({ scope: 'svm', key: 'c', label: '', value: model.c, min: .1, max: 4, step: .1, format: value => Number(value).toFixed(1) }), { route: 'svm-theory', section: 'svm-soft-margin' }) + bubble('Learning rate', rangeControl({ scope: 'svm', key: 'lr', label: '', value: model.lr, min: .005, max: .1, step: .005, format: value => Number(value).toFixed(3) }), { route: 'svm-theory', section: 'svm-optimization' }) + `<button class="theory-link" data-theory-route="svm-theory" data-theory-section="svm-intro"><span>Полное описание алгоритма</span><b>↗</b></button>`;
   const right = bubble('Опорные векторы', `<div class="empty-note"><span class="score">${supportCount}</span> точек задают или нарушают зазор.<br><small>объекты с y·f(x) ≤ 1</small></div>`, { route: 'svm-theory', section: 'svm-support' }) + bubble('Текущий шаг', `<div class="empty-note">J(w) <span class="score">${objective.toFixed(3)}</span><br>точность train: <span class="score">${(accuracy * 100).toFixed(0)}%</span><br>шагов: <span class="score">${model.steps}</span></div>`, { route: 'svm-theory', section: 'svm-hinge' }) + `<div class="lab-side-note">Толстая линия — граница f(x)=0. Пунктир — уровни f(x)=±1; обведённые точки удерживают или нарушают зазор.</div>`;
-  return labLayout('SVM', 'гиперплоскость / зазор / hinge loss', left, `<div class="visual-head"><span>${svmTargetName}</span><div class="visual-head-actions"><button class="dataset-trigger" data-action="show-dataset" data-dataset="svm">Показать датасет ↗</button><span class="metric">soft-margin SVM</span></div></div><div class="svm-stage">${svmChart(model)}</div><div class="svm-parameters"><span>w<sub>1</sub> = ${model.w[0].toFixed(3)}</span><span>w<sub>2</sub> = ${model.w[1].toFixed(3)}</span><span>b = ${model.b.toFixed(3)}</span><span>∥∇J∥ = ${Math.hypot(...gradients.weights, gradients.bias).toFixed(3)}</span></div><div class="lab-controls"><button class="secondary" data-action="svm-reset">Сбросить веса</button><button class="secondary" data-action="svm-step">Один шаг</button><button class="primary" data-action="svm-train">До сходимости →</button></div>`, right, 'svm-lab');
+  return labLayout('Линейный SVM', 'гиперплоскость / зазор / hinge loss', left + '<button class="secondary" data-route="svm">К живой лаборатории</button>', `<div class="visual-head"><span>${svmTargetName}</span><div class="visual-head-actions"><button class="dataset-trigger" data-action="show-dataset" data-dataset="svm">Показать датасет ↗</button><span class="metric">soft-margin SVM</span></div></div><div class="svm-stage">${svmChart(model)}</div><div class="svm-parameters"><span>w<sub>1</sub> = ${model.w[0].toFixed(3)}</span><span>w<sub>2</sub> = ${model.w[1].toFixed(3)}</span><span>b = ${model.b.toFixed(3)}</span><span>∥∇J∥ = ${Math.hypot(...gradients.weights, gradients.bias).toFixed(3)}</span></div><div class="lab-controls"><button class="secondary" data-action="svm-reset">Сбросить веса</button><button class="secondary" data-action="svm-step">Один шаг</button><button class="primary" data-action="svm-train">До сходимости →</button></div>`, right, 'svm-lab');
 }
 
 function graphTreeNodes(tree) {

@@ -265,6 +265,44 @@ try {
   await page.locator('button.back').click();
 
   await openModule(page, 'svm');
+  await page.waitForFunction(() => document.querySelector('[data-svm-count]')?.textContent === '56');
+  await page.locator('[data-svm-preset="overlap"]').click();
+  const liveFrames = await page.locator('#svm-penalty').evaluate(async slider => {
+    const canvas = document.getElementById('svm-live-plot');
+    const frames = new Set();
+    // Change C on consecutive frames, before a quiet period can elapse.
+    for (let frame = 0; frame < 10; frame++) {
+      slider.value = String(-1.8 + frame * .35);
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      frames.add(canvas.toDataURL());
+    }
+    return frames.size;
+  });
+  if (liveFrames < 4) throw new Error('SVM graph must update during continuous slider input');
+  await page.locator('[data-svm-preset="rings"]').click();
+  await page.locator('[data-svm-kernel="rbf"]').click();
+  await page.waitForFunction(() =>
+    document.querySelector('[data-svm-status]')?.textContent === 'Модель готова' &&
+    document.querySelector('[data-svm-accuracy]')?.textContent === '100,0%'
+  );
+  if (!(await page.locator('#svm-gamma').isVisible()) || await page.locator('#svm-degree').isVisible()) {
+    throw new Error('RBF must show gamma and hide polynomial degree');
+  }
+  await page.locator('[data-svm-command="clear"]').click();
+  await page.waitForFunction(() => document.querySelector('[data-svm-count]')?.textContent === '0');
+  await page.locator('[data-svm-command="undo"]').click();
+  await page.waitForFunction(() => document.querySelector('[data-svm-count]')?.textContent === '56');
+  await page.locator('.svm-jumps a[href="#svm-exercises"]').click();
+  if (await page.locator('.svm-exercise').count() !== 12) throw new Error('SVM module must include its twelve exercises');
+  await page.locator('[data-svm-task="1"] input').fill('2');
+  await page.locator('[data-svm-task="1"] button').click();
+  if (await page.locator('[data-svm-progress]').innerText() !== 'Решено 1 из 12') {
+    throw new Error('Correct SVM answers must advance exercise progress');
+  }
+  await page.locator('#svm-hinge-margin').press('Home');
+  if (await page.locator('#svm-hinge-loss').innerText() !== '3,0') throw new Error('The SVM hinge-loss explorer must react to input');
+  await page.locator('[data-route="svm-linear"]').click();
   await page.waitForSelector('input[data-control="svm.c"]');
   if (await page.locator('.svm-point').count() < 50) throw new Error('SVM algorithm must render its generated two-class dataset');
   const initialObjective = Number((await page.locator('.svm-lab .empty-note').nth(1).innerText()).match(/J\(w\)\s+([\d.]+)/)?.[1]);
@@ -276,7 +314,7 @@ try {
   await page.locator('[data-action="show-dataset"]').click();
   await page.waitForSelector('.dataset-profile-screen');
   if (await page.locator('.data-category-bars > div').count() !== 2) throw new Error('SVM dataset profile must visualise class balance');
-  await page.locator('[data-route="svm"]').click();
+  await page.locator('[data-route="svm-linear"]').click();
   await page.locator('[data-theory-route="svm-theory"][data-theory-section="svm-intro"]').click();
   await page.waitForSelector('#svm-kernels');
   if (!(await page.locator('#svm-dual').innerText()).includes('KKT')) throw new Error('SVM theory must explain the dual problem and KKT conditions');

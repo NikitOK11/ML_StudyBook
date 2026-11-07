@@ -1,6 +1,8 @@
+import { mountSvmPlayground } from './src/svm-lab.js';
+import { mountSvmStudy } from './src/svm-study.js';
 import { buildTree, countTreeNodes, gradientStep, linearConvergence, linearGradients, logisticStep, trainLogistic, meanSquaredError, trainLinear, svmStep, trainSvm } from './src/algorithms.js?v=20260915-ml5';
 import { linearDatasets, logisticRows, moduleCatalog, treePoints, svmPoints } from './src/data.js?v=20260915-ml5';
-import { createStore } from './src/state.js?v=20260915-ml5';
+import { createStore } from './src/state.js?v=svm-lab';
 import {
   aboutView,
   datasetProfileView,
@@ -19,19 +21,23 @@ import {
   profileView,
   signupView,
   svmLab,
+  svmLinearLab,
   svmTheoryView,
   treeLab,
   treeNodePopover,
   treeTheoryView,
   unavailableView
-} from './src/views.js?v=20261019-math-pdf';
+} from './src/views.js?v=svm-lab';
 
 const app = document.getElementById('app');
 const store = createStore();
 let demoTimer = null;
 let treeTimer = null;
+let unmountSvm = null;
 
 function render() {
+  unmountSvm?.();
+  unmountSvm = null;
   const state = store.get();
   const module = moduleCatalog.find(item => item.id === state.selectedModule);
 
@@ -48,7 +54,8 @@ function render() {
     'knn-theory': () => knnTheoryView(state.theoryIndexCollapsed),
     tree: () => treeLab(state.tree),
     'tree-theory': () => treeTheoryView(state.theoryIndexCollapsed),
-    svm: () => svmLab(state.svm),
+    svm: svmLab,
+    'svm-linear': () => svmLinearLab(state.svm),
     'svm-theory': () => svmTheoryView(state.theoryIndexCollapsed),
     unavailable: () => module ? unavailableView(module) : mapView(null),
     about: () => aboutView(),
@@ -69,6 +76,9 @@ function render() {
   }
 
   setRangeProgress();
+  const playground = app.querySelector('[data-svm-playground]');
+  if (playground) unmountSvm = mountSvmPlayground(playground);
+  mountSvmStudy(app);
 }
 
 function go(route, section = null, animation = 'page-enter') {
@@ -411,13 +421,14 @@ app.addEventListener('click', event => {
 
 app.addEventListener('input', event => {
   const input = event.target;
-  if (input.matches('.range-control')) setControlValue(input, false);
+  if (input.matches('.range-control[data-control]')) setControlValue(input, false);
+  else if (input.matches('.range-control')) setRangeProgress(input);
 });
 
 app.addEventListener('change', event => {
   const control = event.target;
   if (control.matches('select[data-control]')) setControlValue(control, true);
-  if (control.matches('.range-control') && (control.dataset.control.startsWith('tree.') || control.dataset.control.startsWith('logistic.'))) render();
+  if (control.matches('.range-control[data-control]') && (control.dataset.control.startsWith('tree.') || control.dataset.control.startsWith('logistic.'))) render();
 });
 
 app.addEventListener('submit', event => {

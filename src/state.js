@@ -1,5 +1,5 @@
 const storageKey = 'fitpredict-ml-textbook-v6';
-const knownRoutes = new Set(['intro', 'demo', 'signup', 'map', 'linear', 'linear-theory', 'logistic', 'logistic-theory', 'knn', 'knn-theory', 'tree', 'tree-theory', 'svm', 'svm-theory', 'unavailable', 'about', 'profile', 'dataset-profile']);
+const knownRoutes = new Set(['intro', 'demo', 'signup', 'map', 'linear', 'linear-theory', 'logistic', 'logistic-theory', 'knn', 'knn-theory', 'tree', 'tree-theory', 'svm', 'svm-linear', 'svm-theory', 'unavailable', 'about', 'profile', 'dataset-profile']);
 
 const defaults = {
   route: 'intro',
