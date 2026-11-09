@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "python3 -m http.server 4173 --bind 127.0.0.1",
-    "test": "node tests/linear-math.mjs && node tests/user-flows.mjs",
-    "test:math": "node tests/linear-math.mjs",
+    "test": "node tests/linear-math.mjs && node tests/mlp-math.mjs && node tests/user-flows.mjs && node tests/mlp-browser.mjs",
+    "test:math": "node tests/linear-math.mjs && node tests/mlp-math.mjs",
+    "test:mlp": "node tests/mlp-math.mjs && node tests/mlp-browser.mjs",
     "build:pdf": "node scripts/build-theory-pdf.mjs"
   },
   "devDependencies": {
