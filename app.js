@@ -1,3 +1,4 @@
+import {observeMath} from './src/math/mount.js';
 import { mountSvmPlayground } from './src/svm-lab.js';
 import { mountSvmStudy } from './src/svm-study.js';
 import { buildTree, countTreeNodes, gradientStep, linearConvergence, linearGradients, logisticStep, trainLogistic, meanSquaredError, trainLinear, svmStep, trainSvm } from './src/algorithms.js?v=20260915-ml5';
@@ -30,6 +31,7 @@ import {
 } from './src/views.js?v=svm-lab';
 
 const app = document.getElementById('app');
+observeMath(app);
 const store = createStore();
 let demoTimer = null;
 let treeTimer = null;

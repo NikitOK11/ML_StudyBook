@@ -1,3 +1,4 @@
+import {mathHTML} from './math/renderer.js';
 import { svmPlaygroundView } from './svm-lab.js';
 import { svmExercisesView } from './svm-study.js';
 import { linearDatasets, knnClassNames, knnFeatureNames, knnPoints, knnTarget, knnTargetName, logisticClassNames, logisticFeatureNames, logisticRows, logisticTargetName, treeFeatureNames, treePoints, treeTargetName, treeValidation, moduleCatalog, svmClassNames, svmFeatureNames, svmPoints, svmTargetName } from './data.js?v=20260915-ml5';
@@ -73,12 +74,12 @@ export function mapView(selectedModule) {
 
 const mathCopy = {
   dataset: 'Это преднамеренно крайний пример. Прямая хорошо описывает линейные данные и систематически ошибается на нелинейных.',
-  weight: 'Модель предсказывает ŷ = w·x + b. Вес меняет наклон, а смещение двигает прямую целиком.',
-  gradient: 'Градиент MSE по весу: ∂L/∂w = (2/n)Σ(ŷᵢ − yᵢ)xᵢ. Он показывает, в какую сторону изменить вес.',
-  regularization: 'L2 добавляет λw² к функции потерь и 2λw к градиенту. Большие веса становятся дороже.',
+  weight: 'Модель предсказывает $\\widehat y=w\\cdot x+b$. Вес меняет наклон, а смещение двигает прямую целиком.',
+  gradient: 'Градиент MSE по весу: $\\frac{\\partial L}{\\partial w}=\\frac2n\\sum_i(\\widehat y_i-y_i)x_i$. Он показывает, в какую сторону изменить вес.',
+  regularization: 'L2 добавляет $\\lambda w^2$ к функции потерь и $2\\lambda w$ к градиенту. Большие веса становятся дороже.',
   knn: 'KNN присваивает класс по голосованию ближайших k наблюдений.',
-  metric: 'Евклидова метрика — √(Δx²+Δy²), манхэттенская — |Δx|+|Δy|.',
-  impurity: 'Gini = 1 − Σpₖ². Чистый узел содержит один класс, поэтому его impurity равно нулю.',
+  metric: 'Евклидова метрика — $\\sqrt{\\Delta x^2+\\Delta y^2}$, манхэттенская — $|\\Delta x|+|\\Delta y|$.',
+  impurity: '$\\operatorname{Gini}=1-\\sum_k p_k^2$. Чистый узел содержит один класс, поэтому его impurity равно нулю.',
   split: 'Каждый split реально делит точки на две группы. Δ показывает, насколько уменьшилось взвешенное impurity.'
 };
 
@@ -566,7 +567,7 @@ export function showMath(container, type) {
   const card = container.querySelector('.math-card');
   if (!card) return;
   card.hidden = false;
-  card.innerHTML = `<button aria-label="Закрыть">×</button><b>Почему так:</b> ${mathCopy[type] || ''}`;
+  card.innerHTML = `<button aria-label="Закрыть">×</button><b>Почему так:</b> <span data-math>${mathCopy[type] || ''}</span>`;
   card.querySelector('button').addEventListener('click', () => { card.hidden = true; });
 }
 
