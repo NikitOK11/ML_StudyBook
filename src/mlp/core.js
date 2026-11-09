@@ -1,4 +1,4 @@
-import { randomGenerator, normalRandom } from './config.js';
+import { randomGenerator, normalRandom } from './config.js?v=2';
 
 export const sigmoid = z => z >= 0 ? 1 / (1 + Math.exp(-z)) : Math.exp(z) / (1 + Math.exp(z));
 export const binaryLoss = (z, y) => Math.max(z, 0) - z * y + Math.log1p(Math.exp(-Math.abs(z)));
@@ -108,80 +108,4 @@ export function metrics(model, split, ws) {
     correct += +(+(p >= .5) === y);
   }
   return { loss: loss / split.count, accuracy: correct / split.count, rmse: Math.sqrt(squared / split.count) };
-}
-
-export class Experiment {
-  constructor(config, dataset) {
-    this.config = config; this.dataset = dataset;
-    this.model = createModel([dataset.dimensions, ...config.hidden, 1], config.activation, dataset.task);
-    initialize(this.model, config);
-    this.initial = this.model.params.slice();
-    this.previous = new Float64Array(this.initial.length);
-    this.gradient = new Float64Array(this.initial.length);
-    this.lastGradient = new Float64Array(this.initial.length);
-    this.sampleGradient = new Float64Array(this.initial.length);
-    this.compute = workspace(this.model); this.inspection = workspace(this.model); this.evaluation = workspace(this.model);
-    this.order = new Uint16Array(dataset.train.count);
-    this.lastBatch = new Uint16Array(dataset.train.count);
-    this.reset();
-  }
-  shuffle() {
-    for (let i = 0; i < this.order.length; i++) this.order[i] = i;
-    for (let i = this.order.length - 1; i > 0; i--) {
-      const j = Math.floor(this.rng() * (i + 1));
-      [this.order[i], this.order[j]] = [this.order[j], this.order[i]];
-    }
-  }
-  reset() {
-    this.model.params.set(this.initial); this.model.revision++;
-    this.steps = 0; this.seen = 0; this.cursor = 0; this.lastCount = 0; this.failed = false;
-    this.rng = randomGenerator(this.config.orderSeed); this.shuffle();
-    this.history = []; this.record();
-  }
-  edit(index, value) {
-    if (!Number.isInteger(index) || index < 0 || index >= this.model.params.length || !Number.isFinite(value) || Math.abs(value) > 100) return false;
-    this.model.params[index] = value; this.model.revision++;
-    this.lastCount = 0; this.failed = false; this.history = []; this.record();
-    return true;
-  }
-  inspect(row) {
-    const { train } = this.dataset;
-    this.sampleGradient.fill(0);
-    forward(this.model, train.x, this.inspection, row * this.dataset.dimensions);
-    backward(this.model, train.y[row], this.inspection, this.sampleGradient);
-    return this.inspection;
-  }
-  step() {
-    if (this.failed) return false;
-    if (this.cursor === this.order.length) { this.shuffle(); this.cursor = 0; }
-    const count = Math.min(this.config.batchSize, this.order.length - this.cursor);
-    batchGradient(this.model, this.dataset.train, this.order, this.cursor, count, this.config.l2, this.compute, this.gradient);
-    const { params } = this.model;
-    for (let i = 0; i < params.length; i++) if (!Number.isFinite(this.gradient[i]) || !Number.isFinite(params[i] - this.config.lr * this.gradient[i]) || Math.abs(params[i] - this.config.lr * this.gradient[i]) > 1e8) { this.failed = true; return false; }
-    // Exactly one bounded previous state, outside the sample/neuron loops.
-    this.previous.set(params); this.lastGradient.set(this.gradient);
-    this.lastBatch.set(this.order.subarray(this.cursor, this.cursor + count));
-    this.lastCount = count; this.lastLr = this.config.lr; this.lastL2 = this.config.l2;
-    this.lastFromRevision = this.model.revision; this.lastFromStep = this.steps;
-    for (let i = 0; i < params.length; i++) params[i] -= this.config.lr * this.gradient[i];
-    this.model.revision++; this.steps++; this.seen += count; this.cursor += count;
-    return true;
-  }
-  record() {
-    this.metricsRevision = this.model.revision;
-    this.trainMetrics = metrics(this.model, this.dataset.train, this.evaluation);
-    this.validationMetrics = metrics(this.model, this.dataset.validation, this.evaluation);
-    const point = { step: this.steps, train: this.trainMetrics.loss, validation: this.validationMetrics.loss };
-    if (this.history.at(-1)?.step === this.steps) this.history[this.history.length - 1] = point;
-    else this.history.push(point);
-    // Evenly thin old samples rather than retain every training state.
-    if (this.history.length > 240) this.history = this.history.filter((_, i) => i % 2 === 0 || i === 240);
-    return point;
-  }
-  get epochs() { return this.seen / this.dataset.train.count; }
-  get bufferBytes() {
-    const workspaces = [this.compute, this.inspection, this.evaluation];
-    return [this.model.params, this.initial, this.previous, this.gradient, this.lastGradient, this.sampleGradient, this.order, this.lastBatch,
-      ...workspaces.flatMap(w => [...w.a, ...w.z, ...w.delta, w.inputGradient])].reduce((sum, b) => sum + b.byteLength, 0);
-  }
 }

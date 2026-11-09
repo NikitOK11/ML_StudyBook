@@ -1,5 +1,5 @@
 import { Marked } from '../../vendor/marked/marked.esm.js';
-import { escape } from './view.js';
+import { escape } from './view.js?v=2';
 
 // Math tokens must be recognized before Markdown's underscore/emphasis handling.
 const markdown = new Marked({ gfm: true, breaks: false, extensions: [
@@ -56,54 +56,72 @@ function loadMath() {
   return mathPromise;
 }
 
-export function mountTheory(root, initialSection) {
-  let disposed = false;
-  let scrollFrame = 0;
+export function mountTheory(root, initialSection, { embedded = false } = {}) {
+  let disposed = false, scrollFrame = 0, requestedSection = initialSection, ready = false;
   const abort = new AbortController();
-  root.innerHTML = `<div class="mlp-reading-status" role="status">Загружаем главу и оформляем формулы…</div><div class="mlp-reading-layout" hidden><aside class="mlp-reading-nav"><button class="secondary" data-route="mlp">← К лаборатории</button><button class="mlp-link" data-mlp-toc-toggle aria-expanded="true">Свернуть оглавление</button><nav aria-label="Оглавление главы MLP" data-mlp-toc></nav></aside><article class="mlp-chapter"></article></div>`;
+  root.innerHTML = '<div class="mlp-reading-status" role="status">Оформляем объяснение и формулы…</div>' +
+    '<div class="mlp-reading-layout ' + (embedded ? 'mlp-reading-embedded' : '') + '" hidden>' +
+    '<aside class="mlp-reading-nav">' + (embedded ? '' : '<button class="secondary" data-route="mlp">← К сети</button>') +
+    '<button class="mlp-link" data-mlp-toc-toggle aria-expanded="true">Свернуть оглавление</button><nav aria-label="Оглавление главы MLP" data-mlp-toc></nav></aside><article class="mlp-chapter"></article></div>';
   const article = root.querySelector('article'), status = root.querySelector('[role="status"]');
   const clearMath = () => {
     window.MathJax?.typesetClear?.([article]);
     const doc = window.MathJax?.startup?.document;
     if (doc?.options.elements?.includes(article)) doc.options.elements = [];
   };
-  const scroll = id => {
-    const target = document.getElementById(id);
-    if (target && root.contains(target)) target.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-  };
+  function scroll(id) {
+    const target = article.querySelector('[id="' + (id || 'mlp-start').replace(/[^a-z0-9-]/g, '') + '"]') || article.querySelector('h2');
+    target?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+  function load() {
+    status.setAttribute('role', 'status');
+    status.textContent = 'Оформляем объяснение и формулы…';
+    if (!sourcePromise) sourcePromise = fetch('./src/mlp-theory.md?v=2').then(response => {
+      if (!response.ok) throw new Error('Глава: HTTP ' + response.status);
+      return response.text();
+    }).catch(error => { sourcePromise = null; throw error; });
+    Promise.all([sourcePromise, loadMath()]).then(([source]) => {
+      if (disposed) return;
+      clearMath();
+      article.innerHTML = safeMarkdown(source);
+      const headings = [...article.querySelectorAll('h2')];
+      for (const heading of headings) {
+        const previous = heading.previousElementSibling;
+        const anchor = previous?.matches('a[id]') ? previous : previous?.querySelector('a[id]');
+        if (anchor) { heading.id = anchor.id; anchor.removeAttribute('id'); }
+      }
+      root.querySelector('[data-mlp-toc]').innerHTML = headings.map(heading =>
+        '<a href="#' + heading.id + '">' + escape(heading.textContent) + '</a>').join('');
+      typesetQueue = typesetQueue.catch(() => {}).then(async () => {
+        if (disposed) return;
+        await window.MathJax.typesetPromise([article]);
+        if (disposed) { clearMath(); return; }
+        if (article.querySelector('[data-mjx-error], mjx-merror')) throw new Error('Ошибка оформления формулы');
+        root.querySelector('.mlp-reading-layout').hidden = false; status.hidden = true;
+        root.dataset.typeset = 'ready'; ready = true;
+        if (requestedSection) scrollFrame = requestAnimationFrame(() => { if (!disposed) scroll(requestedSection); });
+      });
+      return typesetQueue;
+    }).catch(error => {
+      if (disposed) return;
+      status.hidden = false; status.setAttribute('role', 'alert');
+      status.innerHTML = 'Не удалось оформить объяснение. <button class="secondary" data-mlp-theory-retry>Повторить загрузку</button>' +
+        (embedded ? '' : '<button class="secondary" data-route="mlp">К сети</button>');
+    });
+  }
   root.addEventListener('click', event => {
     const toggle = event.target.closest('[data-mlp-toc-toggle]');
-    if (toggle) { const collapsed = root.classList.toggle('mlp-toc-collapsed'); toggle.textContent = collapsed ? 'Показать оглавление' : 'Свернуть оглавление'; toggle.setAttribute('aria-expanded', String(!collapsed)); }
+    if (toggle) {
+      const collapsed = root.classList.toggle('mlp-toc-collapsed');
+      toggle.textContent = collapsed ? 'Показать оглавление' : 'Свернуть оглавление';
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+    }
     const link = event.target.closest('a[href^="#mlp-"]');
     if (link) { event.preventDefault(); scroll(link.getAttribute('href').slice(1)); }
+    if (event.target.closest('[data-mlp-theory-retry]')) load();
   }, { signal: abort.signal });
-  if (!sourcePromise) sourcePromise = fetch('./src/mlp-theory.md').then(response => { if (!response.ok) throw new Error(`Глава: HTTP ${response.status}`); return response.text(); }).catch(error => { sourcePromise = null; throw error; });
-  Promise.all([sourcePromise, loadMath()]).then(([source]) => {
-    if (disposed) return;
-    article.innerHTML = safeMarkdown(source);
-    const headings = [...article.querySelectorAll('h2')];
-    for (const heading of headings) {
-      const anchor = heading.previousElementSibling;
-      const innerAnchor = anchor?.querySelector('a[id]');
-      const id = anchor?.id || innerAnchor?.id;
-      if (id) { (innerAnchor || anchor).removeAttribute('id'); heading.id = id; }
-    }
-    root.querySelector('[data-mlp-toc]').innerHTML = headings.map((heading, i) => `<a href="#${heading.id}"><span>${String(i + 1).padStart(2, '0')}</span>${escape(heading.textContent)}</a>`).join('');
-    typesetQueue = typesetQueue.catch(() => {}).then(async () => {
-      if (disposed) return;
-      await window.MathJax.typesetPromise([article]);
-      if (disposed) { clearMath(); return; }
-      if (article.querySelector('[data-mjx-error], mjx-merror')) throw new Error('Ошибка оформления формулы');
-      root.querySelector('.mlp-reading-layout').hidden = false; status.remove();
-      root.dataset.typeset = 'ready';
-      if (initialSection) scrollFrame = requestAnimationFrame(() => { if (!disposed) scroll(initialSection); });
-    });
-    return typesetQueue;
-  }).catch(error => {
-    if (disposed) return;
-    console.error('Глава MLP:', error);
-    status.setAttribute('role', 'alert');
-    status.innerHTML = 'Не удалось оформить главу. Можно повторить загрузку или вернуться к лаборатории.<br><button class="secondary" data-route="mlp-theory">Повторить</button> <button class="secondary" data-route="mlp">К лаборатории</button>';
-  });
-  return () => { disposed = true; abort.abort(); cancelAnimationFrame(scrollFrame); clearMath(); };
+  load();
+  const dispose = () => { disposed = true; abort.abort(); cancelAnimationFrame(scrollFrame); clearMath(); };
+  dispose.scrollTo = id => { requestedSection = id; if (ready) scroll(id); };
+  return dispose;
 }

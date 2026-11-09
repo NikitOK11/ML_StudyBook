@@ -1,8 +1,8 @@
 import { mountSvmPlayground } from './src/svm-lab.js';
 import { mountSvmStudy } from './src/svm-study.js';
 import { buildTree, countTreeNodes, gradientStep, linearConvergence, linearGradients, logisticStep, trainLogistic, meanSquaredError, trainLinear, svmStep, trainSvm } from './src/algorithms.js?v=20260915-ml5';
-import { linearDatasets, logisticRows, moduleCatalog, treePoints, svmPoints } from './src/data.js?v=20260915-ml5';
-import { createStore } from './src/state.js?v=svm-lab';
+import { linearDatasets, logisticRows, moduleCatalog, treePoints, svmPoints } from './src/data.js?v=mlp-intro-2';
+import { createStore } from './src/state.js?v=mlp-intro-2';
 import {
   aboutView,
   datasetProfileView,
@@ -28,7 +28,7 @@ import {
   treeNodePopover,
   treeTheoryView,
   unavailableView
-} from './src/views.js?v=svm-lab';
+} from './src/views.js?v=mlp-intro-2';
 
 const app = document.getElementById('app');
 const store = createStore();
@@ -71,7 +71,6 @@ function render() {
     profile: () => profileView(state.profile),
     'dataset-profile': () => {
       const profile = state.datasetProfile || { kind: 'linear', returnRoute: 'linear' };
-      if (profile.kind === 'mlp') return `${nav()}<main class="mlp-shell" data-mlp-mount><p role="status">Готовим профиль данных…</p></main>`;
       return datasetProfileView(profile.kind, profile.returnRoute);
     }
   };
@@ -92,17 +91,12 @@ function render() {
   const mount = app.querySelector('[data-mlp-mount]');
   if (mount) {
     const chapter = state.route === 'mlp-theory';
-    import(chapter ? './src/mlp/theory-loader.js' : './src/mlp/lab.js').then(async module => {
+    import(chapter ? './src/mlp/theory-loader.js?v=2' : './src/mlp/lab.js?v=2').then(async module => {
       if (version !== mountVersion) return;
       if (chapter) {
         unmountMlp = module.mountTheory(mount, theorySection);
       } else if (state.route === 'mlp') {
-        unmountMlp = module.mountLab(mount, state.mlp, mlp => store.set({ mlp }), route => {
-          if (route === 'dataset-profile') store.set({ datasetProfile: { kind: 'mlp', returnRoute: 'mlp' } });
-          go(route);
-        });
-      } else {
-        app.innerHTML = datasetProfileView('mlp', 'mlp', module.getProfile(state.mlp));
+        unmountMlp = module.mountLab(mount, state.mlp, mlp => store.set({ mlp }));
       }
     }).catch(error => {
       if (version !== mountVersion) return;

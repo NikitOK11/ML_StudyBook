@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { defaultConfig, validateConfig } from '../src/mlp/config.js';
-import { makeDataset } from '../src/mlp/data.js';
-import { createModel, initialize, workspace, forward, backward, batchGradient, metrics, activate, derivative, binaryLoss, sigmoid, distribution, Experiment } from '../src/mlp/core.js';
+import { xorExamples } from '../src/mlp/data.js';
+import { createLessonModel, forwardWorkspace, setActivation, exampleOutputs } from '../src/mlp/lesson.js';
+import { createModel, initialize, workspace, forward, backward, batchGradient, metrics, activate, derivative, binaryLoss, sigmoid, distribution } from '../src/mlp/core.js';
 import { createStore } from '../src/state.js';
 
 const close = (a, b, tolerance = 1e-9) => assert.ok(Math.abs(a - b) <= tolerance * Math.max(1, Math.abs(a), Math.abs(b)), `${a} ≠ ${b}`);
-const cfg = patch => validateConfig({ ...defaultConfig, ...patch });
+// Numerical helpers remain tested independently of the introductory UI.
+const cfg = patch => ({ initSeed: 7, initialization: 'xavier-normal', bias: 0, ...patch });
 
 // Independent scalar calculation; no engine calls in the reference equations.
 const z1 = .5 * .8 + (-.4) * (-.5) + .1, z2 = .3 * .8 + .2 * (-.5) - .2;
@@ -93,57 +95,71 @@ const rg = new Float64Array(randomModel.params.length); const rw = workspace(ran
 forward(randomModel, [.3, -.2], rw); backward(randomModel, 1, rw, rg);
 assert.ok(rg.subarray(0, 6).some(v => Math.abs(v) > 1e-5));
 
-for (const kind of ['xor', 'circles', 'wave']) {
-  const c = cfg({ dataset: kind }), data = makeDataset(kind, c.dataSeed);
-  assert.deepEqual(data, makeDataset(kind, c.dataSeed));
-  for (let j = 0; j < data.dimensions; j++) {
-    let mean = 0, square = 0;
-    for (let i = 0; i < data.train.count; i++) { mean += data.train.x[i * data.dimensions + j] / data.train.count; square += data.train.x[i * data.dimensions + j] ** 2 / data.train.count; }
-    close(mean, 0); close(square, 1);
-  }
-  const e = new Experiment(c, data), e2 = new Experiment(c, data);
-  for (let i = 0; i < 2000; i++) { assert.ok(e.step()); e2.step(); if (i % 20 === 0) e.record(); }
-  assert.deepEqual(e.model.params, e2.model.params); e.record();
-  if (kind !== 'wave') assert.ok(e.validationMetrics.accuracy >= .96, `${kind}: ${e.validationMetrics.accuracy}`);
-  else assert.ok(e.validationMetrics.rmse < .2, `wave RMSE ${e.validationMetrics.rmse}`);
-  console.log(`${kind}: loss ${e.validationMetrics.loss.toFixed(5)}, accuracy ${e.validationMetrics.accuracy.toFixed(3)}, RMSE ${e.validationMetrics.rmse.toFixed(4)}`);
-  const before = e.model.params.slice(); e.inspect(0); e.inspect(1); assert.deepEqual(e.model.params, before);
-  e.reset(); assert.deepEqual(e.model.params, e.initial); assert.equal(e.steps, 0); e.step();
-  e2.reset(); e2.step(); assert.deepEqual(e.model.params, e2.model.params);
-}
-assert.deepEqual(validateConfig({ ...defaultConfig, hidden: Array(10000).fill(999) }).hidden, [8, 8]);
-assert.equal(validateConfig({ ...defaultConfig, lr: NaN }).lr, .08);
-assert.equal(validateConfig({ version: -1, dataset: 'wave' }).dataset, 'xor');
-for (const mlp of [undefined, null, 'broken', { version:0 }, { ...defaultConfig, hidden:Array(10000).fill(100), parameters:Array(50000).fill(2), lr:null }]) {
-  let saved = JSON.stringify({ route:'mlp', profile:{fullName:'Ученик',email:'user@example.com'}, mlp });
-  globalThis.localStorage = { getItem:()=>saved, setItem:(_,value)=>{saved=value}, removeItem:()=>{saved=null} };
-  const store = createStore();
-  assert.equal(store.get().profile.fullName, 'Ученик'); assert.deepEqual(store.get().mlp.hidden, [8,8]);
-  store.set({route:'mlp-theory'}); assert.ok(saved.length < 3000); assert.ok(!Object.hasOwn(JSON.parse(saved).mlp,'parameters'));
-}
-globalThis.localStorage = { getItem(){throw new Error('disabled')}, setItem(){throw new Error('disabled')}, removeItem(){throw new Error('disabled')} };
-const memoryOnlyStore = createStore(); memoryOnlyStore.set({route:'mlp'}); assert.equal(memoryOnlyStore.get().route,'mlp');
-delete globalThis.localStorage;
-// Last partial batch is averaged by its own size, and an invalid update is atomic.
-const partial = new Experiment(cfg({batchSize:50}), makeDataset('xor',42));
-partial.step(); partial.step(); partial.step(); assert.equal(partial.lastCount,28); assert.equal(partial.epochs,1);
-const failedBefore = partial.model.params.slice(); partial.config.lr=Number.MAX_VALUE;
-assert.equal(partial.step(),false); assert.deepEqual(partial.model.params,failedBefore);
-assert.equal(partial.steps,3);
 
-// The chapter embeds audited JSON in a non-rendered Markdown comment.
-if (!process.argv.includes('--core-only')) {
-  const chapter = await readFile(new URL('../src/mlp-theory.md', import.meta.url), 'utf8');
-  const published = JSON.parse(chapter.match(/<!-- worked-example\s*([\s\S]*?)\s*-->/)?.[1] || '{}');
-  for (const [key, value] of Object.entries(workedExample)) {
-    assert.ok(Object.hasOwn(published, key), `Missing published worked-example ${key}`);
-    if (Array.isArray(value)) value.forEach((v, i) => close(v, published[key][i], 5e-7)); else close(value, published[key], 5e-7);
+// Exact reference coefficients and forward signals, all canonical XOR rows.
+const reference = createLessonModel(defaultConfig), referenceBuffer = reference.params;
+assert.deepEqual([...reference.params], [1,-1,-1,1,0,0,1,1,0]);
+assert.deepEqual(exampleOutputs(reference), [0,1,1,0]);
+assert.deepEqual(Object.keys(forwardWorkspace(reference)).sort(), ['a','z']);
+const trace = forwardWorkspace(reference);
+const rows = xorExamples.map(({input, target}) => {
+  forward(reference, input, trace);
+  return [...input, ...trace.z[0], ...trace.a[1], trace.a[2][0], target, 0];
+});
+assert.deepEqual(rows, [
+  [0,0,0,0,0,0,0,0,0], [0,1,-1,1,0,1,1,1,0],
+  [1,0,1,-1,1,0,1,1,0], [1,1,0,0,0,0,0,0,0]
+]);
+for (const input of [[3,0],[-2,3],[-.5,-1.5],[.4,.4]]) close(forward(reference,input,trace),Math.abs(input[0]-input[1]));
+const parameters = [...reference.params];
+setActivation(reference,'identity');
+assert.equal(reference.params,referenceBuffer,'Activation switch must reuse the same parameter buffer');
+assert.deepEqual([...reference.params],parameters);
+assert.deepEqual(exampleOutputs(reference),[0,0,0,0]);
+for (const input of [[3,0],[-2,3]]) close(forward(reference,input,trace),0);
+setActivation(reference,'relu'); assert.deepEqual(exampleOutputs(reference),[0,1,1,0]);
+assert.deepEqual([...reference.params],parameters);
+assert.throws(()=>setActivation(reference,'sigmoid'));
+
+const lessonConfig = patch => validateConfig({...defaultConfig,...patch});
+assert.deepEqual(exampleOutputs(createLessonModel(lessonConfig({hidden:[]}))),[0,-1,1,0]);
+assert.deepEqual(exampleOutputs(createLessonModel(lessonConfig({hidden:[1]}))),[0,0,1,0]);
+assert.deepEqual(exampleOutputs(createLessonModel(lessonConfig({hidden:[3]}))),[0,2,2,2]);
+assert.deepEqual(exampleOutputs(createLessonModel(lessonConfig({hidden:[2,2]}))),[0,1,1,0]);
+assert.deepEqual(exampleOutputs(createLessonModel(lessonConfig({hidden:[4,1]}))),[0,0,1,0]);
+assert.deepEqual(exampleOutputs(createLessonModel(lessonConfig({hidden:[1,4]}))),[0,0,1,0]);
+for (const hidden of [[], ...[1,2,3,4].map(n=>[n]), ...[1,2,3,4].flatMap(a=>[1,2,3,4].map(b=>[a,b]))]) {
+  for (const activation of ['relu','identity']) {
+    const c=lessonConfig({hidden,activation}), model=createLessonModel(c), ws=forwardWorkspace(model);
+    assert.deepEqual(model.params,createLessonModel(c).params);
+    assert.equal(model.params.length,model.sizes.slice(1).reduce((p,n,i)=>p+n*(model.sizes[i]+1),0));
+    for(const e of xorExamples) assert.ok(Number.isFinite(forward(model,e.input,ws)));
+    assert.deepEqual(model.params,createLessonModel(c).params,'Selection/forward must never mutate parameters');
   }
-  const visibleExample = chapter.split('<a id="mlp-worked"></a>')[1].split('<!-- worked-example')[0];
-  const tableRows = [...visibleExample.matchAll(/^\| \$[^\n]+?\$ \| (-?[\d.]+) \| (-?[\d.]+) \| (-?[\d.]+) \|$/gm)];
-  assert.equal(tableRows.length, 9, 'Nine visible, auditable SGD rows are required');
-  tableRows.forEach((row, i) => { close(+row[1], initial[i]); close(+row[2], workedExample.gradients[i], 5e-9); close(+row[3], workedExample.updated[i], 5e-9); });
-  for (const key of ['a1', 'a2', 'logit', 'probability', 'loss', 'delta', 'd1', 'd2']) assert.ok(visibleExample.includes(workedExample[key].toFixed(9)), `Visible example omits ${key}`);
 }
-if (process.argv.includes('--example')) console.log(JSON.stringify(workedExample, null, 2));
-console.log('MLP mathematics: all checks passed.');
+for (const input of [undefined,null,'broken',{version:1,hidden:[16,16],activation:'tanh'},{version:2,hidden:Array(10000).fill(99),activation:'sigmoid',example:999}]) {
+  assert.deepEqual(validateConfig(input),{version:2,hidden:[2],activation:'relu',example:1});
+}
+assert.deepEqual(validateConfig({...defaultConfig,hidden:[]}).hidden,[]);
+const legacy = {version:1,hidden:[16,16],dataset:'wave',batchSize:128,params:Array(50000).fill(1)};
+for (const route of ['mlp','dataset-profile']) {
+  let saved=JSON.stringify({route,datasetProfile:{kind:'mlp',returnRoute:'mlp'},profile:{fullName:'Ученик',email:'user@example.com'},linear:{w:[1,2,3]},mlp:legacy});
+  globalThis.localStorage={getItem:()=>saved,setItem:(_,value)=>{saved=value},removeItem:()=>{saved=null}};
+  const store=createStore();
+  assert.equal(store.get().route,'mlp'); assert.equal(store.get().datasetProfile,null);
+  assert.deepEqual(store.get().mlp,{version:2,hidden:[2],activation:'relu',example:1});
+  assert.equal(store.get().profile.fullName,'Ученик'); assert.deepEqual(store.get().linear.w,[1,2,3]);
+  store.set({route:'mlp-theory'});
+  assert.ok(saved.length<3000); assert.ok(!Object.hasOwn(JSON.parse(saved).mlp,'params'));
+}
+globalThis.localStorage={getItem(){throw Error('disabled')},setItem(){throw Error('disabled')},removeItem(){throw Error('disabled')}};
+const memoryOnlyStore=createStore(); memoryOnlyStore.set({route:'mlp'}); assert.equal(memoryOnlyStore.get().route,'mlp');
+delete globalThis.localStorage;
+
+// Verify the visible Markdown table, not a hidden fixture.
+const chapter=await readFile(new URL('../src/mlp-theory.md',import.meta.url),'utf8');
+const worked=chapter.split('<a id="mlp-worked"></a>')[1].split('<a id="mlp-parameters"></a>')[0];
+const published=[...worked.matchAll(/^\| ([\d -]+(?:\| [\d -]+){8})\|$/gm)].map(m=>m[1].split('|').map(v=>+v.trim()));
+assert.deepEqual(published,rows,'Published forward table must match every actual intermediate value');
+assert.ok(!/батч|backprop|оптимизатор|регуляризац|инициализац|градиент|Momentum|Adam|generalization/i.test(chapter));
+console.log('MLP introductory lesson and retained numerical helpers: all checks passed.');

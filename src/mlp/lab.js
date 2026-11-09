@@ -1,193 +1,150 @@
-import { defaultConfig, validateConfig, initializationNames } from './config.js';
-import { makeDataset, datasetProfile } from './data.js';
-import { Experiment } from './core.js';
-import { labView, format, escape } from './view.js';
-import { buildDiagram, updateDiagram, inspectorHTML, initializationHTML, layerSummary } from './diagram.js';
-import { createPlots } from './plots.js';
+import { defaultConfig, validateConfig } from './config.js?v=2';
+import { xorExamples } from './data.js?v=2';
+import { forward } from './core.js?v=2';
+import { createLessonModel, forwardWorkspace, setActivation, exampleOutputs } from './lesson.js?v=2';
+import { labView, format } from './view.js?v=2';
+import { buildDiagram, updateDiagram, inspectorHTML } from './diagram.js?v=2';
 
-let current = null;
-let comparisons = [];
-const comparisonKey = config => JSON.stringify({ ...config, initialization: null, normalMean: null, normalStd: null, uniformMin: null, uniformMax: null, bias: null });
-export function getExperiment(config) {
-  const validated = validateConfig(config);
-  if (!current || JSON.stringify(current.config) !== JSON.stringify(validated)) current = new Experiment(validated, makeDataset(validated.dataset, validated.dataSeed));
-  return current;
-}
-export const getProfile = config => datasetProfile(getExperiment(config).dataset);
-
-export function mountLab(root, config, persist, go) {
-  let e = getExperiment(config), running = false, disposed = false, frame = 0, animation = null;
-  let row = 0, selection = { kind: 'neuron', layer: 1, neuron: 0 }, diagram, plots;
-  let lastPaint = 0, paintCost = 0, trainingMs = 0, trainingSteps = 0, mode = 'selected';
+export function mountLab(root, saved, persist) {
+  let config = validateConfig(saved), model = createLessonModel(config), ws = forwardWorkspace(model);
+  let selection = { kind: 'neuron', layer: 1, neuron: 0 }, diagram, disposed = false, frame = 0;
+  let unmountTheory = null, loadingTheory = null, requestedSection = null;
   const abort = new AbortController();
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function phase(title, copy) {
-    root.querySelector('[data-mlp-phase-title]').textContent = title;
-    root.querySelector('[data-mlp-phase-copy]').textContent = copy;
+  root.innerHTML = labView();
+  const find = selector => root.querySelector(selector);
+  const svg = find('[data-mlp-network]'), reading = find('[data-mlp-reading]');
+  const status = find('[data-mlp-phase]');
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+
+  function cancelAnimation() {
+    cancelAnimationFrame(frame); frame = 0;
+    find('[data-mlp-action="forward"]').disabled = false;
+    svg.removeAttribute('data-phase');
+    if (diagram) updateDiagram(diagram, model, ws, selection);
   }
-  function busy(value) {
-    for (const control of root.querySelectorAll('[data-mlp-action], [data-mlp-config] input, [data-mlp-config] select, [data-mlp-config] button, [data-mlp-preset], [data-mlp-live]')) {
-      if (control.dataset.mlpAction === 'dataset') continue;
-      control.disabled = control.dataset.mlpAction === 'pause' ? !value : value;
+  function syncControls() {
+    find('[name="layers"]').value = String(config.hidden.length);
+    find('[data-mlp-widths]').innerHTML = config.hidden.map((width, i) =>
+      '<label>Нейронов в слое ' + (i + 1) + '<select data-mlp-setting="width" data-layer="' + i + '">' +
+      [1, 2, 3, 4].map(n => '<option value="' + n + '" ' + (n === width ? 'selected' : '') + '>' + n + '</option>').join('') + '</select></label>').join('');
+    find('[data-mlp-activation-note]').textContent = config.hidden.length
+      ? 'Меняется только функция активации. Все веса и смещения остаются прежними. Выходной слой всегда тождественный.'
+      : 'Скрытых слоёв нет: выход равен x₁ − x₂. Сравнивать скрытые активации здесь негде.';
+    root.querySelectorAll('[data-mlp-activation]').forEach(button => {
+      button.disabled = !config.hidden.length;
+      button.setAttribute('aria-pressed', String(button.dataset.mlpActivation === config.activation));
+    });
+  }
+  function update() {
+    forward(model, xorExamples[config.example].input, ws);
+    updateDiagram(diagram, model, ws, selection);
+    find('[data-mlp-inspector]').innerHTML = inspectorHTML(model, ws, selection);
+    find('[data-mlp-architecture]').textContent = model.sizes.join(' → ');
+    find('[data-mlp-parameter-count]').textContent = 'Параметров: ' + model.params.length;
+    find('[data-mlp-output]').textContent = format(ws.a.at(-1)[0]);
+    const reference = config.hidden.length === 1 && config.hidden[0] === 2;
+    find('[data-mlp-result]').textContent = (reference
+      ? config.activation === 'relu' ? 'ReLU сохраняет положительную разность: выход равен |x₁ − x₂|.'
+        : 'При тех же весах разности взаимно уничтожаются: (x₁ − x₂) + (x₂ − x₁) = 0.'
+      : 'У этой архитектуры свои заданные коэффициенты. Сравни реальные выходы со значениями XOR в четырёх примерах.') +
+      ' Это значение функции, не вероятность.';
+    exampleOutputs(model).forEach((output, i) => {
+      find('[data-mlp-example-output="' + i + '"]').textContent = format(output);
+      find('[data-mlp-example="' + i + '"]').setAttribute('aria-pressed', String(i === config.example));
+    });
+  }
+  function rebuild() {
+    cancelAnimation();
+    model = createLessonModel(config); ws = forwardWorkspace(model);
+    selection = { kind: 'neuron', layer: 1, neuron: 0 };
+    diagram = buildDiagram(svg, model);
+    syncControls(); update();
+    status.textContent = 'Сеть готова. Значения рассчитаны для выбранного входа.';
+  }
+  function save() { persist(validateConfig(config)); }
+  function animate() {
+    cancelAnimation();
+    if (motion.matches) { update(); status.textContent = 'Прямой проход завершён: значения всех слоёв показаны на схеме.'; return; }
+    const started = performance.now(), duration = 320;
+    find('[data-mlp-action="forward"]').disabled = true;
+    function tick(now) {
+      if (disposed) return;
+      const layer = Math.floor((now - started) / duration);
+      if (layer >= model.sizes.length) {
+        cancelAnimation();
+        status.textContent = 'Прямой проход завершён. Выход: ' + format(ws.a.at(-1)[0]) + '.';
+        return;
+      }
+      svg.dataset.phase = String(layer);
+      updateDiagram(diagram, model, ws, selection, layer);
+      status.textContent = layer === 0 ? 'Вход: два числа выбранного примера.' :
+        layer === model.sizes.length - 1 ? 'Выход: складываем взвешенные сигналы и смещение.' :
+        'Скрытый слой ' + layer + ': взвешенная сумма z, затем ' + (config.activation === 'relu' ? 'ReLU(z).' : 'a = z.');
+      frame = requestAnimationFrame(tick);
     }
-    root.querySelectorAll('[data-mlp-edit] input, [data-mlp-edit] button').forEach(c => { c.disabled = value; });
-    if (!value) syncForm();
-  }
-  function inspector() { root.querySelector('[data-mlp-inspector]').innerHTML = inspectorHTML(e, selection, row, running || !!animation); }
-  function update(full = true) {
-    if (disposed) return;
-    const start = performance.now();
-    if (e.metricsRevision !== e.model.revision) e.record();
-    e.inspect(row);
-    updateDiagram(diagram, e, selection, mode);
-    // Keep a user's manual edit intact while focused. Training disables that form.
-    if (!root.querySelector('[data-mlp-edit]')?.contains(document.activeElement)) inspector();
-    root.querySelector('[data-mlp-layer-summary]').innerHTML = layerSummary(e);
-    const values = { steps: e.steps, epochs: e.epochs.toFixed(2), parameters: e.model.params.length,
-      trainLoss: format(e.trainMetrics.loss), validationLoss: format(e.validationMetrics.loss),
-      quality: e.dataset.task === 'binary' ? `${(e.validationMetrics.accuracy * 100).toFixed(1)}%` : format(e.validationMetrics.rmse) };
-    for (const [key, value] of Object.entries(values)) root.querySelector(`[data-mlp-stat="${key}"]`).textContent = value;
-    root.querySelector('[data-mlp-model-stamp]').textContent = `Все текущие сигналы: шаг ${e.steps} · версия ${e.model.revision} · пример № ${row + 1}`;
-    root.querySelector('[data-mlp-prediction-stamp]').textContent = `Шаг ${e.steps}`;
-    root.dataset.steps = String(e.steps); root.dataset.revision = String(e.model.revision);
-    if (full) plots.update(row);
-    paintCost = performance.now() - start;
-    root.dataset.paintMs = String(paintCost);
-    root.querySelector('[data-mlp-performance]').textContent = `Буферы: ${((e.bufferBytes + plots.bufferBytes) / 1024).toFixed(0)} КиБ · последний кадр ${paintCost.toFixed(1)} мс${trainingMs ? ` · обучение ${Math.round(trainingSteps / trainingMs * 1000)} шагов/с` : ''}.`;
-  }
-  function syncForm() {
-    const form = root.querySelector('[data-mlp-config]');
-    const count = Math.max(1, Math.min(4, +form.elements.layers.value || 1));
-    for (let i = 0; i < 4; i++) form.elements[`width${i}`].disabled = running || !!animation || i >= count;
-    for (const field of form.querySelectorAll('[data-init-fields]')) field.hidden = field.dataset.initFields !== form.elements.initialization.value;
-  }
-  function rememberComparison() {
-    if (!e.steps) return;
-    const key = comparisonKey(e.config);
-    const extra = e.config.initialization === 'normal' ? `, μ=${e.config.normalMean}, σ=${e.config.normalStd}` : e.config.initialization === 'uniform' ? `, [${e.config.uniformMin}, ${e.config.uniformMax}]` : '';
-    comparisons.push({ key, method: initializationNames[e.config.initialization] + extra + `, b=${e.config.bias}`, steps: e.steps, loss: e.validationMetrics.loss });
-    if (comparisons.length > 4) comparisons.shift();
-  }
-  function setup() {
-    mode = e.model.params.length <= 200 ? 'all' : 'selected';
-    root.innerHTML = labView(e.config, e.dataset);
-    root.querySelector('[data-mlp-edge-mode]').value = mode;
-    diagram = buildDiagram(root.querySelector('[data-mlp-network]'), e.model);
-    plots = createPlots(root, e);
-    root.querySelector('[data-mlp-init-stats]').innerHTML = initializationHTML(e);
-    const comparable = comparisons.filter(c => c.key === comparisonKey(e.config));
-    root.querySelector('[data-mlp-comparisons]').innerHTML = comparable.length ? `<p>Предыдущие старты с теми же данными, архитектурой, активацией, seeds и настройками SGD. Сравни число шагов:</p><div class="mlp-table-scroll"><table><thead><tr><th>Инициализация</th><th>Шагов</th><th>Ошибка проверки</th></tr></thead><tbody>${comparable.map(c => `<tr><td>${escape(c.method)}</td><td>${c.steps}</td><td>${format(c.loss)}</td></tr>`).join('')}</tbody></table></div>` : '';
-    syncForm(); update();
-  }
-  function stop(message = true) {
-    running = false; animation = null; cancelAnimationFrame(frame); frame = 0;
-    if (disposed) return;
-    delete diagram.svg.dataset.phase;
-    e.record(); busy(false); update();
-    if (message) phase('На паузе', `Шаг ${e.steps}. Можно изучить любой элемент или изменить вес вручную. Сходимость автоматически не объявляется.`);
-  }
-  function rebuild(next) {
-    stop(false); rememberComparison();
-    const clean = validateConfig(next); persist(clean);
-    e = current = new Experiment(clean, makeDataset(clean.dataset, clean.dataSeed));
-    row = 0; selection = { kind: 'neuron', layer: 1, neuron: 0 }; mode = 'selected'; trainingMs = 0; trainingSteps = 0;
-    setup(); phase('Новая сеть готова', 'История и старые градиенты очищены. С теми же seeds повторится тот же эксперимент.');
-  }
-  function animate(kind) {
-    if (running || animation) return;
-    e.inspect(row);
-    const layers = e.model.sizes.length;
-    const phases = kind === 'step' ? ['forward', 'backward', 'update'] : [kind];
-    let previousStage = '';
-    const start = performance.now(), layerDuration = reducedMotion ? 0 : 100;
-    animation = kind; busy(true); inspector();
-    const tick = now => {
-      if (disposed || !animation) return;
-      const unit = layerDuration ? Math.floor((now - start) / layerDuration) : layers * phases.length;
-      const stage = phases[Math.min(phases.length - 1, Math.floor(unit / layers))];
-      diagram.svg.dataset.phase = stage;
-      const progress = unit % layers;
-      if (stage !== previousStage) {
-        previousStage = stage;
-        if (stage === 'forward') phase('Прямой проход · выбранный пример', 'Входы → взвешенные суммы → активации → прогноз. Веса пока не меняются.');
-        if (stage === 'backward') phase('Обратный проход · выбранный пример', 'От ошибки к δ и производным. Это градиент одного примера без L2, а не будущего батча.');
-        if (stage === 'update') phase('Обновление · следующий батч', 'Для SGD пересчитываем средний градиент настоящего батча и добавляем λW.');
-      }
-      updateDiagram(diagram, e, selection, mode, stage === 'backward' ? layers - 1 - progress : progress);
-      if (unit >= layers * phases.length) {
-        animation = null;
-        delete diagram.svg.dataset.phase;
-        if (kind === 'step') e.step();
-        e.record(); busy(false); update();
-        if (e.failed) phase('Шаг отклонён: численная нестабильность', 'Веса не изменены. Уменьши η или масштаб начальных весов и повтори инициализацию.');
-        else phase(kind === 'step' ? 'SGD: обновление завершено' : kind === 'forward' ? 'Прямой проход завершён' : 'Обратный проход завершён', kind === 'step' ? `Шаг ${e.steps}. Все текущие сигналы пересчитаны с новыми весами. В разборе связи отдельно сохранён предыдущий градиент батча.` : `Пример № ${row + 1}, шаг ${e.steps}. Параметры не изменялись. Выбери нейрон или связь для разбора.`);
-        frame = 0; return;
-      }
-      frame = requestAnimationFrame(tick);
-    };
     frame = requestAnimationFrame(tick);
   }
-  function train() {
-    if (running || animation) return;
-    if (e.failed) { phase('Сначала переинициализируй сеть', 'Предыдущий запуск численно неустойчив. Уменьши скорость или начальный масштаб.'); return; }
-    running = true; busy(true); inspector();
-    phase('Обучение идёт', 'Вычисления идут порциями до 6 мс. Сеть и графики обновляются не чаще 12 раз/с. Пауза доступна в любой момент.');
-    const tick = now => {
-      if (!running || disposed) return;
-      const start = performance.now(); let steps = 0;
-      do { if (!e.step()) break; steps++; } while (steps < 40 && performance.now() - start < 6);
-      trainingMs += performance.now() - start; trainingSteps += steps;
-      if (now - lastPaint >= 85) { e.record(); update(); lastPaint = now; }
-      if (e.failed || e.steps >= 100000) {
-        stop(false); phase(e.failed ? 'Обучение остановлено: численная нестабильность' : 'Достигнут предел 100 000 шагов', e.failed ? 'Последний нестабильный шаг не применён. Уменьши скорость или масштаб инициализации.' : 'Это ограничение длительности запуска, а не доказательство сходимости. Сбрось опыт или изучи текущие параметры.'); return;
-      }
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
+  function ensureTheory(section = null) {
+    if (section) requestedSection = section;
+    if (unmountTheory) { if (section) unmountTheory.scrollTo(section); return; }
+    if (loadingTheory) return;
+    loadingTheory = import('./theory-loader.js?v=2').then(module => {
+      if (disposed) return;
+      unmountTheory = module.mountTheory(reading, requestedSection, { embedded: true });
+    }).catch(() => {
+      if (!disposed) reading.innerHTML = '<p role="alert">Не удалось открыть объяснение.</p><button class="secondary" data-mlp-action="read">Повторить загрузку</button>';
+      loadingTheory = null;
+    });
   }
+  const observer = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) { observer.disconnect(); ensureTheory(); }
+  }, { rootMargin: '120px' });
+  observer.observe(reading);
+
   root.addEventListener('click', event => {
-    const target = event.target.closest('[data-mlp-action], [data-mlp-neuron], [data-mlp-edge], [data-mlp-bias], [data-mlp-preset]');
-    if (!target) return;
-    if (target.hasAttribute('data-mlp-neuron')) { const [layer, neuron] = target.dataset.mlpNeuron.split(':').map(Number); selection = { kind: 'neuron', layer, neuron }; update(false); }
-    else if (target.hasAttribute('data-mlp-edge') || target.hasAttribute('data-mlp-bias')) { selection = { kind: target.hasAttribute('data-mlp-edge') ? 'edge' : 'bias', index: +(target.dataset.mlpEdge ?? target.dataset.mlpBias) }; update(false); }
-    else if (target.dataset.mlpPreset) {
-      const preset = target.dataset.mlpPreset;
-      rebuild({ ...e.config, initialization: preset === 'bad' ? 'normal' : preset, normalMean: 0, normalStd: preset === 'bad' ? 5 : e.config.normalStd, bias: 0 });
-      const copy = preset === 'zero' ? 'Симметричные скрытые нейроны получают одинаковые обновления. При tanh/ReLU и всех нулевых весах скрытые веса не обучаются, но выходное смещение может обновляться. В сбалансированном полном батче и оно может получить нулевой градиент.' : preset === 'bad' ? 'При больших весах sigmoid/tanh могут насытиться; у ReLU возможен рост сигналов. Смотри нормы и производные, затем сравни ошибку после одинакового числа шагов.' : 'Xavier балансирует fan-in и fan-out. He сохраняет второй момент для ReLU при оговорённых предпосылках. Выходной слой тоже использует выбранную схему — проверь его масштаб отдельно.';
-      root.querySelector('[data-mlp-guide-copy]').textContent = copy;
-    } else {
-      const action = target.dataset.mlpAction;
-      if (action === 'pause') stop();
-      else if (action === 'train') train();
-      else if (action === 'reset') { stop(false); e.reset(); update(); phase('Начальное состояние восстановлено', 'Восстановлены все начальные параметры и порядок батчей; счётчики и история обнулены.'); }
-      else if (action === 'dataset') { stop(false); go('dataset-profile'); }
-      else animate(action);
+    const link = event.target.closest('[data-mlp-section]');
+    if (link) { event.preventDefault(); ensureTheory(link.dataset.mlpSection); return; }
+    const example = event.target.closest('[data-mlp-example]');
+    if (example) {
+      cancelAnimation(); config.example = +example.dataset.mlpExample; update(); save();
+      status.textContent = 'Новый вход. Коэффициенты сети прежние.'; return;
     }
+    const activation = event.target.closest('[data-mlp-activation]');
+    if (activation && config.hidden.length) {
+      cancelAnimation(); config.activation = activation.dataset.mlpActivation;
+      setActivation(model, config.activation); syncControls(); update(); save();
+      status.textContent = 'Активация изменена. Веса и смещения сохранены.'; return;
+    }
+    const action = event.target.closest('[data-mlp-action]')?.dataset.mlpAction;
+    if (action === 'reset') { config = validateConfig(defaultConfig); rebuild(); save(); return; }
+    if (action === 'forward') { animate(); return; }
+    if (action === 'read') { ensureTheory('mlp-start'); return; }
+    const node = event.target.closest('[data-mlp-neuron], [data-mlp-edge], [data-mlp-bias]');
+    if (!node) return;
+    cancelAnimation();
+    if (node.hasAttribute('data-mlp-neuron')) {
+      const [layer, neuron] = node.dataset.mlpNeuron.split(':').map(Number);
+      selection = { kind: 'neuron', layer, neuron };
+    } else selection = node.hasAttribute('data-mlp-edge')
+      ? { kind: 'edge', index: +node.dataset.mlpEdge } : { kind: 'bias', index: +node.dataset.mlpBias };
+    update();
   }, { signal: abort.signal });
   root.addEventListener('keydown', event => {
-    if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('svg [role="button"]')) { event.preventDefault(); event.target.dispatchEvent(new MouseEvent('click', { bubbles: true })); }
-  }, { signal: abort.signal });
-  root.addEventListener('change', event => {
-    const control = event.target;
-    if (control.matches('[data-mlp-example]')) { row = +control.value; update(); }
-    else if (control.matches('[data-mlp-edge-mode]')) { mode = control.value; update(false); }
-    else if (control.matches('[data-mlp-select-edge]') && control.value !== '') { selection = { kind: 'edge', index: +control.value }; update(false); }
-    else if (control.matches('[data-mlp-live]')) {
-      if (!control.checkValidity() || !control.value) { control.reportValidity(); return; }
-      e.config = validateConfig({ ...e.config, [control.dataset.mlpLive]: +control.value }); persist(e.config);
-      phase('Настройки следующего шага изменены', 'Последнее выполненное обновление хранит прежние η и λ. Новые значения применятся со следующего батча.');
-    } else if (control.closest('[data-mlp-config]')) syncForm();
-  }, { signal: abort.signal });
-  root.addEventListener('submit', event => {
-    event.preventDefault();
-    if (event.target.matches('[data-mlp-config]')) {
-      const data = new FormData(event.target), c = { ...e.config };
-      for (const [key, value] of data) if (!key.startsWith('width') && key !== 'layers') c[key] = ['dataset', 'activation', 'initialization'].includes(key) ? value : +value;
-      c.hidden = Array.from({ length: +data.get('layers') }, (_, i) => +data.get(`width${i}`)); rebuild(c);
-    } else if (event.target.matches('[data-mlp-edit]') && !running && !animation) {
-      e.edit(selection.index, +new FormData(event.target).get('value')); e.inspect(row); inspector(); update(); phase('Параметр изменён вручную', 'Сигналы и предсказания пересчитаны. История очищена; следующий батч получит новый градиент.');
+    const node = event.target.closest('svg [role="button"]');
+    if (node && ['Enter', ' '].includes(event.key)) {
+      event.preventDefault(); node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     }
   }, { signal: abort.signal });
-  setup();
-  return () => { disposed = true; running = false; animation = null; cancelAnimationFrame(frame); abort.abort(); };
+  root.addEventListener('change', event => {
+    const control = event.target.closest('[data-mlp-setting]');
+    if (!control) return;
+    if (control.dataset.mlpSetting === 'layers') config.hidden = Array.from({ length: +control.value }, (_, i) => config.hidden[i] || 2);
+    else config.hidden[+control.dataset.layer] = +control.value;
+    config = validateConfig(config); rebuild(); save();
+  }, { signal: abort.signal });
+  motion.addEventListener('change', () => { if (motion.matches) cancelAnimation(); }, { signal: abort.signal });
+  rebuild();
+  return () => {
+    disposed = true; cancelAnimationFrame(frame); abort.abort(); observer.disconnect(); unmountTheory?.();
+  };
 }

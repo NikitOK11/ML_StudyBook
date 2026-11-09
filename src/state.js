@@ -1,4 +1,4 @@
-import { validateConfig } from './mlp/config.js';
+import { validateConfig } from './mlp/config.js?v=2';
 const storageKey = 'fitpredict-ml-textbook-v6';
 const knownRoutes = new Set(['intro', 'demo', 'signup', 'map', 'linear', 'linear-theory', 'logistic', 'logistic-theory', 'knn', 'knn-theory', 'tree', 'tree-theory', 'svm', 'svm-linear', 'svm-theory', 'mlp', 'mlp-theory', 'unavailable', 'about', 'profile', 'dataset-profile']);
 
@@ -30,6 +30,10 @@ export function createStore() {
   value.profile = { ...defaults.profile, ...value.profile };
   // Whitelist fields instead of carrying arbitrary old buffers into later saves.
   value.mlp = validateConfig(value.mlp);
+  if (value.datasetProfile?.kind === 'mlp') {
+    value.datasetProfile = null;
+    if (value.route === 'dataset-profile') value.route = 'mlp';
+  }
   value.linear = { ...defaults.linear, ...value.linear };
   if (!Array.isArray(value.linear.w) || value.linear.w.length !== 3) value.linear.w = [0, 0, 0];
   value.logistic = { ...defaults.logistic, ...value.logistic };
