@@ -48,8 +48,8 @@ try {
   await firstPage.locator('input[name="email"]').fill('nikita@example.com');
   await firstPage.locator('form[data-form="signup"]').getByRole('button', { name: 'Зарегистрироваться' }).click();
   await firstPage.waitForSelector('.map-screen');
-  if (await firstPage.locator('[data-select-module]').count() !== 5) throw new Error('The map must show the five available algorithms');
-  if (await firstPage.locator('.module-route').count() !== 1) throw new Error('Map must render one continuous route through all modules');
+  if (await firstPage.locator('[data-select-module]').count() !== 6) throw new Error('The map must show all six available algorithms');
+  if (await firstPage.locator('.module-route:visible').count() !== 1) throw new Error('Map must render one visible continuous route through all modules');
   if ((await firstPage.locator('.map').innerText()).includes('/')) throw new Error('Module cards must not show stage copy after a slash');
   if (await firstPage.getByRole('button', { name: 'Учебник' }).count() !== 1) throw new Error('Navigation must label the map as the textbook');
 

@@ -1,0 +1,5 @@
+Marked 15.0.12, MIT License (LICENSE.md).
+Upstream: https://github.com/markedjs/marked/tree/v15.0.12
+Vendored ES module: https://cdn.jsdelivr.net/npm/marked@15.0.12/lib/marked.esm.js
+No runtime CDN requests. Used only by the lazy MLP chapter loader.
+Raw Markdown HTML is filtered with the application's explicit DOM allowlist before insertion.

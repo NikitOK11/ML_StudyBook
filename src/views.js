@@ -8,7 +8,7 @@ export function escapeHTML(value) {
   return String(value).replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char]));
 }
 
-function nav() {
+export function nav() {
   return `<header class="topbar"><div class="top-label">FIT <span>&amp;</span> PREDICT</div><nav class="top-actions" aria-label="Основная навигация"><button class="quiet-button" data-route="map">Учебник</button><button class="quiet-button" data-route="about">О проекте</button><button class="quiet-button" data-route="profile">Профиль</button></nav></header>`;
 }
 
@@ -66,9 +66,13 @@ export function signupView(profile) {
 }
 
 export function mapView(selectedModule) {
-  const coordinates = ['map-node-1', 'map-node-2', 'map-node-3', 'map-node-4', 'map-node-5'];
+  const coordinates = [[13, 75], [23, 36], [48, 18], [78, 35], [76, 72], [47, 63]];
   const active = moduleCatalog.find(module => module.id === selectedModule);
-  return `${nav()}<main class="map-screen"><div class="map-head map-head-compact"><div class="map-head-actions"><p>Выбери алгоритм на маршруте, затем открой его.</p></div></div><section class="map"><svg class="map-svg" viewBox="0 0 1000 660" preserveAspectRatio="none" role="img" aria-label="Карта алгоритмов машинного обучения"><path class="module-route" d="M104 536 C170 426 252 256 368 190 C462 136 545 166 626 245 C689 306 722 327 770 307 C844 274 878 218 932 148"/><circle class="route-point" cx="104" cy="536" r="7"/><circle class="route-point" cx="368" cy="190" r="7"/><circle class="route-point" cx="626" cy="245" r="7"/><circle class="route-point" cx="770" cy="307" r="7"/><circle class="route-point" cx="932" cy="148" r="7"/><circle class="star" cx="93" cy="76" r="2"/><circle class="star" cx="470" cy="35" r="1.5"/><circle class="star" cx="930" cy="72" r="2"/><circle class="star" cx="935" cy="474" r="1.5"/><circle class="star" cx="552" cy="620" r="2"/><circle class="star" cx="267" cy="555" r="1.5"/></svg>${moduleCatalog.map((module, index) => `<button class="node ${coordinates[index]} ${selectedModule === module.id ? 'active' : ''}" data-select-module="${module.id}"><small>${module.stage}</small><strong>${module.title}</strong><span>${module.subtitle}</span></button>`).join('')}<div class="map-open"><button class="primary" data-action="open-module" ${active ? '' : 'disabled'}>${active ? `Открыть: ${active.title}` : 'Выбери модуль'} <span>→</span></button></div></section></main>`;
+  return `${nav()}<main class="map-screen"><div class="map-head map-head-compact"><div class="map-head-actions"><p>Выбери алгоритм на маршруте, затем открой его.</p></div></div>
+    <section class="map map-six"><svg class="map-svg map-desktop-route" viewBox="0 0 1000 680" preserveAspectRatio="none" role="img" aria-label="Последовательная спираль из шести алгоритмов"><path class="module-route" d="M130 510 C110 400 150 310 230 245 S365 110 480 122 S730 160 780 238 S850 425 760 490 S505 530 470 428"/>${coordinates.map(([x,y]) => `<circle class="route-point" cx="${x * 10}" cy="${y * 6.8}" r="7"/>`).join('')}</svg>
+    <svg class="map-svg map-mobile-route" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"><path class="module-route" d="M220 100 C220 170 750 140 750 240 S220 300 220 400 S750 460 750 560 S220 620 220 720 S750 760 750 840"/></svg>
+    ${moduleCatalog.map((module, index) => `<button class="node ${selectedModule === module.id ? 'active' : ''}" style="--map-x:${coordinates[index][0]}%;--map-y:${coordinates[index][1]}%;--map-mx:${index % 2 ? 75 : 22}%;--map-my:${[10,24,40,56,72,84][index]}%" data-select-module="${module.id}"><small>${module.stage}</small><strong>${module.title}</strong><span>${module.subtitle}</span></button>`).join('')}
+    <div class="map-open"><button class="primary" data-action="open-module" ${active ? '' : 'disabled'}>${active ? `Открыть: ${active.title}` : 'Выбери модуль'} <span>→</span></button></div></section></main>`;
 }
 
 const mathCopy = {
@@ -543,8 +547,8 @@ function categoricalTargetMarkup(values) {
   return `<div class="data-target-summary"><p>Редкий класс составляет <b>${(imbalance * 100).toFixed(0)}%</b> от крупнейшего: ${imbalance < .5 ? 'дисбаланс заметный' : 'баланс близок к равному'}.</p><div class="data-category-bars">${counts.map(item => `<div><span>${escapeHTML(item.label)}</span><i><b style="--category-width:${item.count / values.length * 100}%"></b></i><em>${item.count} · ${(item.count / values.length * 100).toFixed(0)}%</em></div>`).join('')}</div></div>`;
 }
 
-export function datasetProfileView(kind, returnRoute = 'map') {
-  const dataset = profileSource(kind);
+export function datasetProfileView(kind, returnRoute = 'map', suppliedDataset = null) {
+  const dataset = suppliedDataset || profileSource(kind);
   const columns = dataset.featureNames.map((_, index) => dataset.rows.map(row => row[index]));
   const numericNames = dataset.targetType === 'numeric' ? [...dataset.featureNames, dataset.targetName] : dataset.featureNames;
   const numericColumns = dataset.targetType === 'numeric' ? [...columns, dataset.target] : columns;

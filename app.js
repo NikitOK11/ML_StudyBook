@@ -18,6 +18,7 @@ import {
   logisticLab,
   logisticTheoryView,
   mapView,
+  nav,
   profileView,
   signupView,
   svmLab,
@@ -34,8 +35,14 @@ const store = createStore();
 let demoTimer = null;
 let treeTimer = null;
 let unmountSvm = null;
+let unmountMlp = null;
+let mountVersion = 0;
+let theorySection = null;
 
 function render() {
+  const version = ++mountVersion;
+  unmountMlp?.();
+  unmountMlp = null;
   unmountSvm?.();
   unmountSvm = null;
   const state = store.get();
@@ -57,11 +64,14 @@ function render() {
     svm: svmLab,
     'svm-linear': () => svmLinearLab(state.svm),
     'svm-theory': () => svmTheoryView(state.theoryIndexCollapsed),
+    mlp: () => `${nav()}<main class="mlp-shell" data-mlp-mount><p role="status">Загружаем лабораторию…</p></main>`,
+    'mlp-theory': () => `${nav()}<main class="mlp-theory-shell" data-mlp-mount><p role="status">Готовим математическую главу…</p></main>`,
     unavailable: () => module ? unavailableView(module) : mapView(null),
     about: () => aboutView(),
     profile: () => profileView(state.profile),
     'dataset-profile': () => {
       const profile = state.datasetProfile || { kind: 'linear', returnRoute: 'linear' };
+      if (profile.kind === 'mlp') return `${nav()}<main class="mlp-shell" data-mlp-mount><p role="status">Готовим профиль данных…</p></main>`;
       return datasetProfileView(profile.kind, profile.returnRoute);
     }
   };
@@ -79,9 +89,31 @@ function render() {
   const playground = app.querySelector('[data-svm-playground]');
   if (playground) unmountSvm = mountSvmPlayground(playground);
   mountSvmStudy(app);
+  const mount = app.querySelector('[data-mlp-mount]');
+  if (mount) {
+    const chapter = state.route === 'mlp-theory';
+    import(chapter ? './src/mlp/theory-loader.js' : './src/mlp/lab.js').then(async module => {
+      if (version !== mountVersion) return;
+      if (chapter) {
+        unmountMlp = module.mountTheory(mount, theorySection);
+      } else if (state.route === 'mlp') {
+        unmountMlp = module.mountLab(mount, state.mlp, mlp => store.set({ mlp }), route => {
+          if (route === 'dataset-profile') store.set({ datasetProfile: { kind: 'mlp', returnRoute: 'mlp' } });
+          go(route);
+        });
+      } else {
+        app.innerHTML = datasetProfileView('mlp', 'mlp', module.getProfile(state.mlp));
+      }
+    }).catch(error => {
+      if (version !== mountVersion) return;
+      console.error('Не удалось загрузить модуль MLP', error);
+      mount.innerHTML = '<p role="alert">Не удалось загрузить модуль. Обнови страницу или вернись к карте.</p><button class="secondary" data-route="map">К карте</button>';
+    });
+  }
 }
 
 function go(route, section = null, animation = 'page-enter') {
+  theorySection = route === 'mlp-theory' ? section : null;
   stopDemoAnimation();
   stopTreeAnimation();
   store.set({ route });

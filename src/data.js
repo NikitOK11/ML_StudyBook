@@ -171,5 +171,6 @@ export const moduleCatalog = [
   { id: 'linear', title: 'Линейная регрессия', subtitle: 'веса и градиентный спуск', stage: '02', available: true },
   { id: 'logistic', title: 'Логистическая регрессия', subtitle: 'score, сигмоида и log-loss', stage: '03', available: true },
   { id: 'tree', title: 'Решающее дерево', subtitle: 'сплиты и impurity', stage: '04', available: true },
-  { id: 'svm', title: 'SVM', subtitle: 'зазор и опорные векторы', stage: '05', available: true }
+  { id: 'svm', title: 'SVM', subtitle: 'зазор и опорные векторы', stage: '05', available: true },
+  { id: 'mlp', title: 'Многослойный перцептрон', subtitle: 'сигналы, градиенты и обучение', stage: '06', available: true }
 ];

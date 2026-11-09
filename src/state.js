@@ -1,5 +1,6 @@
+import { validateConfig } from './mlp/config.js';
 const storageKey = 'fitpredict-ml-textbook-v6';
-const knownRoutes = new Set(['intro', 'demo', 'signup', 'map', 'linear', 'linear-theory', 'logistic', 'logistic-theory', 'knn', 'knn-theory', 'tree', 'tree-theory', 'svm', 'svm-linear', 'svm-theory', 'unavailable', 'about', 'profile', 'dataset-profile']);
+const knownRoutes = new Set(['intro', 'demo', 'signup', 'map', 'linear', 'linear-theory', 'logistic', 'logistic-theory', 'knn', 'knn-theory', 'tree', 'tree-theory', 'svm', 'svm-linear', 'svm-theory', 'mlp', 'mlp-theory', 'unavailable', 'about', 'profile', 'dataset-profile']);
 
 const defaults = {
   route: 'intro',
@@ -7,6 +8,7 @@ const defaults = {
   theoryIndexCollapsed: false,
   datasetProfile: null,
   profile: { fullName: '', email: '', avatar: '' },
+  mlp: validateConfig(),
   linear: { dataset: 'linear', w: [0, 0, 0], b: 0, lr: .08, reg: .02, steps: 0, converged: false, stopReason: null },
   logistic: { w: [.3, -.2], b: 0, lr: .18, reg: .02, steps: 0, converged: false },
   knn: { k: 3, metric: 'euclidean', selectedPoint: null },
@@ -21,11 +23,13 @@ export function createStore() {
   } catch {
     // Старое или вручную повреждённое localStorage не должно оставлять сайт
     // на пустом экране: начинаем безопасно с первого экрана.
-    localStorage.removeItem(storageKey);
+    try { localStorage.removeItem(storageKey); } catch { /* Storage can be disabled entirely. */ }
   }
   let value = { ...defaults, ...persisted };
   if (!knownRoutes.has(value.route)) value.route = defaults.route;
   value.profile = { ...defaults.profile, ...value.profile };
+  // Whitelist fields instead of carrying arbitrary old buffers into later saves.
+  value.mlp = validateConfig(value.mlp);
   value.linear = { ...defaults.linear, ...value.linear };
   if (!Array.isArray(value.linear.w) || value.linear.w.length !== 3) value.linear.w = [0, 0, 0];
   value.logistic = { ...defaults.logistic, ...value.logistic };
@@ -37,7 +41,7 @@ export function createStore() {
   const listeners = new Set();
 
   const notify = () => listeners.forEach(listener => listener(value));
-  const save = () => localStorage.setItem(storageKey, JSON.stringify(value));
+  const save = () => { try { localStorage.setItem(storageKey, JSON.stringify(value)); } catch { /* Private mode / full quota: the current experiment remains usable. */ } };
 
   return {
     get: () => value,
