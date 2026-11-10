@@ -204,7 +204,7 @@ try {
   if (await page.locator('#logistic-likelihood-derivation .derivation-step').count() < 5) throw new Error('Logistic theory must derive binary cross-entropy from likelihood');
   if (!(await page.locator('#logistic-softmax').innerText()).includes('softmax')) throw new Error('Logistic theory must cover the multiclass softmax extension');
   if (!(await page.locator('#logistic-ranking-metrics').innerText()).includes('AUC-ROC')) throw new Error('Logistic theory must explain threshold-independent ranking metrics');
-  if (!(await page.locator('#logistic-boundary').innerText()).includes('p(x)=0.5')) throw new Error('Logistic theory must connect score boundary to the probability threshold');
+  if (!(await page.locator('#logistic-boundary [data-tex]').getAttribute('data-tex')).includes('p(x)=0.5')) throw new Error('Logistic theory must connect score boundary to the probability threshold');
   await page.locator('[data-route="logistic"]').first().click();
   await page.locator('button.back').click();
 
@@ -254,7 +254,7 @@ try {
   await page.waitForSelector('#tree-missing');
   if (!(await page.locator('#tree-missing').innerText()).includes('Surrogate split')) throw new Error('Tree theory must cover missing-value strategies');
   if (await page.locator('#tree-worked-split .derivation-step').count() < 5) throw new Error('Tree theory must include a complete worked impurity calculation');
-  if (!(await page.locator('#tree-categorical').innerText()).includes('2M−1−1')) throw new Error('Tree theory must explain categorical split search');
+  if (!(await page.locator('#tree-categorical').innerHTML()).includes('2^{M-1}-1')) throw new Error('Tree theory must explain categorical split search');
   await page.locator('[data-route="tree"]').first().click();
   await page.locator('input[data-control="tree.depth"]').evaluate(input => {
     input.value = '1';

@@ -1,0 +1,17 @@
+.math-display{display:block;max-width:100%;overflow-x:auto;overflow-y:hidden;padding:12px 6px;line-height:1.7;color:#eee6cc;font:16px/1.7 system-ui,sans-serif;letter-spacing:normal;text-transform:none}
+.math-inline{font:inherit;color:inherit;letter-spacing:normal;text-transform:none}
+.math-display mjx-container[display=true]{margin:0!important;min-width:min-content}
+.math-display mjx-container{max-width:none!important}.math-inline mjx-container{font-size:105%!important}
+.derivation-step>div,.equation-card>div,.theory-block{min-width:0}
+@media(max-width:760px){.math-display{font-size:14px}}
+.theory-index,.theory-index-content,.theory-sheet,.notation-card,.derivation-card,.derivation-steps,.derivation-step{min-width:0;max-width:100%}
+.theory-index a{overflow-wrap:anywhere}.notation-card dt{overflow-wrap:anywhere}
+@media(max-width:900px){.theory-layout,.theory-layout.is-index-collapsed{grid-template-columns:minmax(0,1fr)}}
+.equation-card .math-display{font:16px/1.7 system-ui,sans-serif;color:#eee6cc;letter-spacing:normal;text-transform:none}
+.math-display span,.math-inline span{font:inherit;letter-spacing:normal;text-transform:none;color:inherit;display:inline}
+@media(max-width:760px){.equation-card .math-display{font-size:14px}}
+.notation-card dt .math-inline{display:block;max-width:100%;overflow-x:auto;overflow-y:hidden;padding:5px 0;font-size:14px}
+/* Give full expressions their own row rather than clipping notation to a label column. */
+.notation-card dl>div{grid-template-columns:minmax(0,1fr);gap:4px}
+/* Reserve the formula's space without flashing its TeX source during local typesetting. */
+.math-display:not(:has(mjx-container)),.math-inline:not(:has(mjx-container)){visibility:hidden}
