@@ -1,7 +1,7 @@
 {
-  "sourceHash": "e242d07a9544b86523ad83e5d5790b5b3fd7b61510f93558a05b6854de56f993",
+  "sourceHash": "5b902559d024e676dd4c29efffb39837494eadd0d30ec49524f8512ac5b60d4c",
   "source": "src/theory.js + src/linear-theory.js",
-  "paragraphCount": 207,
+  "paragraphCount": 244,
   "formulaCount": 134,
   "sectionCount": 37,
   "chapters": [
@@ -11,187 +11,187 @@
       "sections": [
         {
           "id": "linear-intro",
-          "title": "Одна модель. Три разных вопроса.",
+          "title": "Одна прямая, три вопроса и немного паники",
           "formulas": 0
         },
         {
           "id": "linear-notation",
-          "title": "Наблюдения, параметры и случайные величины",
+          "title": "Кто все эти буквы?",
           "formulas": 0
         },
         {
           "id": "linear-model",
-          "title": "Линейность относится к параметрам",
+          "title": "Что именно в ней линейного?",
           "formulas": 1
         },
         {
           "id": "linear-objective",
-          "title": "Квадратичная ошибка и роль смещения",
+          "title": "Как измерить, насколько модель неправа?",
           "formulas": 1
         },
         {
           "id": "linear-scalar-proof",
-          "title": "Находим прямую через частные производные",
+          "title": "Ищем лучшую прямую через производные",
           "formulas": 10
         },
         {
           "id": "linear-covariance",
-          "title": "Наклон — совместное изменение, делённое на разброс",
+          "title": "Откуда наклон знает про ковариацию?",
           "formulas": 6
         },
         {
           "id": "linear-worked-example",
-          "title": "Числа, которые можно проверить вручную",
+          "title": "Посчитаем руками (да, прям руками)",
           "formulas": 1
         },
         {
           "id": "linear-analytic",
-          "title": "Normal equations: от дифференциала к весам",
+          "title": "Normal equations, или МНК для любого числа признаков",
           "formulas": 8
         },
         {
           "id": "linear-rank",
-          "title": "Когда веса не единственны",
+          "title": "Что, если веса не единственны?",
           "formulas": 7
         },
         {
           "id": "linear-projection",
-          "title": "Почему остаток перпендикулярен признакам",
+          "title": "МНК как тень: почему остаток перпендикулярен признакам",
           "formulas": 5
         },
         {
           "id": "linear-gradient-derivation",
-          "title": "Что вычисляет кнопка «Один шаг»",
+          "title": "Что на самом деле делает кнопка «Один шаг»",
           "formulas": 6
         },
         {
           "id": "gradient-direction-proof",
-          "title": "Локальное направление убывания",
+          "title": "Почему шагаем именно против градиента?",
           "formulas": 3
         },
         {
           "id": "linear-gradient",
-          "title": "Learning rate ограничивает спектр",
+          "title": "Какой learning rate не взорвёт обучение",
           "formulas": 6
         },
         {
           "id": "linear-conditioning",
-          "title": "Почему похожие признаки замедляют обучение",
+          "title": "Почему похожие признаки тормозят обучение",
           "formulas": 0
         },
         {
           "id": "gradient-variants",
-          "title": "Число шагов и число просмотренных объектов",
+          "title": "Batch, mini-batch и SGD: сколько данных на один шаг?",
           "formulas": 1
         },
         {
           "id": "linear-probability",
-          "title": "Случайный шум не обязан быть нормальным",
+          "title": "Что на самом деле предсказывает MSE?",
           "formulas": 4
         },
         {
           "id": "linear-loss-derivation",
-          "title": "Вывод максимального правдоподобия",
+          "title": "Откуда берётся квадрат: нормальный шум и правдоподобие",
           "formulas": 5
         },
         {
           "id": "linear-noise-laws",
-          "title": "Выбор плотности меняет функцию потерь",
+          "title": "А если шум не нормальный?",
           "formulas": 10
         },
         {
           "id": "linear-estimator",
-          "title": "Насколько случайны найденные коэффициенты",
+          "title": "Насколько случайны найденные коэффициенты?",
           "formulas": 5
         },
         {
           "id": "linear-gauss-markov",
-          "title": "В каком смысле МНК оптимален",
+          "title": "В каком смысле МНК — лучший?",
           "formulas": 6
         },
         {
           "id": "linear-inference",
-          "title": "От остатков к статистической неопределённости",
+          "title": "От остатков к доверительным интервалам",
           "formulas": 8
         },
         {
           "id": "linear-prediction",
-          "title": "Почему предиктивный интервал шире",
+          "title": "Почему новый ответ предсказать сложнее, чем среднее",
           "formulas": 2
         },
         {
           "id": "linear-heteroskedasticity",
-          "title": "Взвешивание и корректные стандартные ошибки",
+          "title": "Что, если шум у всех разный?",
           "formulas": 6
         },
         {
           "id": "linear-consistency",
-          "title": "Чего не исправит большая выборка",
+          "title": "Чего не исправит даже бесконечная выборка",
           "formulas": 4
         },
         {
           "id": "linear-regularization",
-          "title": "Добавляем штраф, сохраняя свободный член",
+          "title": "Ridge: штрафуем веса, но не смещение",
           "formulas": 4
         },
         {
           "id": "linear-regularization-deep",
-          "title": "За устойчивость платим смещением",
+          "title": "Bias и variance весов: бесплатных обедов не бывает",
           "formulas": 2
         },
         {
           "id": "linear-lasso-geometry",
-          "title": "Почему L1 может дать ровно нулевой вес",
+          "title": "L1 против L2: почему Lasso умеет обнулять веса",
           "formulas": 7
         },
         {
           "id": "linear-bayes",
-          "title": "MAP и распределение весов после данных",
+          "title": "Байесовский взгляд: MAP и веса после данных",
           "formulas": 6
         },
         {
           "id": "linear-bias-variance",
-          "title": "Доказательство bias² + variance + noise",
+          "title": "Из чего состоит ошибка прогноза: bias² + variance + noise",
           "formulas": 4
         },
         {
           "id": "linear-feature-map",
-          "title": "Когда прямая — слишком узкая гипотеза",
+          "title": "Когда прямой мало: новые признаки",
           "formulas": 0
         },
         {
           "id": "linear-loss-catalog",
-          "title": "Среднее, медиана и квантиль отвечают на разные вопросы",
+          "title": "MSE, MAE и квантили: разные loss — разные вопросы",
           "formulas": 4
         },
         {
           "id": "linear-validation",
-          "title": "От доказанного минимума к полезному прогнозу",
+          "title": "Минимум на train — ещё не победа",
           "formulas": 0
         },
         {
           "id": "linear-risk",
-          "title": "Риск — ожидание по будущим объектам",
+          "title": "Что на самом деле оценивает validation",
           "formulas": 1
         },
         {
           "id": "linear-diagnostics",
-          "title": "Что смотреть после обучения",
+          "title": "Модель обучилась. Что дальше?",
           "formulas": 1
         },
         {
           "id": "linear-causality",
-          "title": "Коэффициент и причинное воздействие",
+          "title": "Коэффициент — ещё не причина",
           "formulas": 0
         },
         {
           "id": "linear-practice",
-          "title": "Три коротких вывода своими руками",
+          "title": "О боже, домашка, неееет :(",
           "formulas": 0
         },
         {
           "id": "linear-sources",
-          "title": "Где продолжить разбор",
+          "title": "Что почитать дальше",
           "formulas": 0
         }
       ]
